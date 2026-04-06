@@ -1,0 +1,147 @@
+"""Content domain types."""
+
+from __future__ import annotations
+
+import enum
+from dataclasses import dataclass
+
+# ============================================================
+# Enumerations
+# ============================================================
+
+
+class ContentStatus(str, enum.Enum):
+    """Content review status."""
+
+    pending = "pending"
+    approved = "approved"
+    rejected = "rejected"
+
+
+class ContentType(str, enum.Enum):
+    """Supported media types."""
+
+    image = "image"
+    video = "video"
+    document = "document"
+
+
+class UserRole(str, enum.Enum):
+    """System user roles."""
+
+    employee = "employee"
+    reviewer = "reviewer"
+    admin = "admin"
+
+
+class AuditDecision(str, enum.Enum):
+    """Audit review decisions."""
+
+    approved = "approved"
+    rejected = "rejected"
+
+
+# ============================================================
+# Command Objects
+# ============================================================
+
+
+@dataclass(slots=True)
+class CreateContentCommand:
+    """Command for creating new content."""
+
+    title: str
+    description: str | None
+    tags: list[str]
+    content_type: ContentType
+    file_key: str
+    uploaded_by: int
+
+
+@dataclass(slots=True)
+class UpdateContentCommand:
+    """Command for updating existing content."""
+
+    title: str | None = None
+    description: str | None = None
+    tags: list[str] | None = None
+
+
+@dataclass(slots=True)
+class AuditContentCommand:
+    """Command for auditing content."""
+
+    content_id: int
+    auditor_id: int
+    decision: AuditDecision
+    comments: str | None = None
+
+
+@dataclass(slots=True)
+class SearchContentCommand:
+    """Command for semantic content search."""
+
+    query: str
+    limit: int = 10
+    content_type: str | None = None
+
+
+# ============================================================
+# Output Objects
+# ============================================================
+
+
+@dataclass(slots=True)
+class ContentOutput:
+    """Content data returned by service layer."""
+
+    id: int
+    title: str
+    description: str | None
+    tags: list[str]
+    content_type: ContentType
+    status: ContentStatus
+    file_key: str
+    file_url: str | None
+    file_size: int | None
+    ai_summary: str | None
+    ai_keywords: list[str]
+    uploaded_by: int
+    created_at: str
+    updated_at: str
+
+
+@dataclass(slots=True)
+class ContentListOutput:
+    """Paginated content list returned by service layer."""
+
+    total: int
+    items: list[ContentOutput]
+
+
+@dataclass(slots=True)
+class AuditLogOutput:
+    """Audit log entry returned by service layer."""
+
+    id: int
+    content_id: int
+    auditor_id: int
+    audit_status: str
+    audit_comments: str | None
+    audit_time: str
+
+
+@dataclass(slots=True)
+class SearchResultOutput:
+    """Single search result with relevance score."""
+
+    content: ContentOutput
+    score: float
+
+
+@dataclass(slots=True)
+class PresignedUrlOutput:
+    """Presigned upload URL result."""
+
+    upload_url: str
+    file_key: str

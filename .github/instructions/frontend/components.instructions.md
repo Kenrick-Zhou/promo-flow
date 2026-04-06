@@ -1,0 +1,84 @@
+---
+applyTo: "frontend/src/components/**/*.tsx"
+---
+## Role
+- UI building blocks. Each component receives data via props and renders JSX. No direct API calls or routing logic.
+- Components in `components/` are **reusable**; page-specific one-offs belong in `pages/`.
+
+## Directory Layout
+```
+src/components/
+├── content/          # Content domain: ContentCard, ContentGrid, UploadForm
+├── layout/           # App shell: Layout (sidebar + outlet), Sidebar
+└── ui/               # Generic presentational atoms (buttons, badges, inputs) — add as needed
+```
+- Group by **domain** (content, audit, etc.) or **role** (layout, ui).
+- One component per file. File name matches the default export in PascalCase.
+
+## Component Conventions
+
+### Function Components Only
+- Use `export default function ComponentName(...)` — no class components.
+- Use `function` declarations (not arrow-assigned) for top-level component exports for hoisting and readability:
+  ```tsx
+  // ✅ Preferred
+  export default function ContentCard({ content, onClick }: Props) { ... }
+
+  // ❌ Avoid
+  const ContentCard: React.FC<Props> = ({ content, onClick }) => { ... }
+  ```
+
+### Props
+- Define a local `interface Props` (or `XxxProps` if exported) above the component.
+- Destructure props in the function signature.
+- Use `children?: React.ReactNode` when the component accepts children.
+- Callbacks follow `onXxx` naming: `onClick`, `onSuccess`, `onSelect`.
+
+```tsx
+interface Props {
+  content: Content
+  onClick?: () => void
+}
+
+export default function ContentCard({ content, onClick }: Props) { ... }
+```
+
+### Imports
+- Use `@/` path alias for all project imports (resolves to `src/`).
+- Import types with `import type { ... }` for type-only imports.
+- Prefer named imports for types; default imports for components.
+
+### State & Effects
+- Use React hooks (`useState`, `useEffect`, `useCallback`, etc.) directly.
+- For data fetching, delegate to custom hooks in `hooks/` (e.g., `useContent()`).
+- Avoid `useEffect` for derived state — compute inline or use `useMemo`.
+
+### Event Handlers
+- Define event handlers as inner `function handleXxx(...)` or `async function handleXxx(...)`.
+- Keep handler logic minimal; delegate to hooks/services for side effects.
+
+### Conditional Rendering
+- Use ternary or `&&` for simple cases.
+- Use early return for empty/loading/error states:
+  ```tsx
+  if (items.length === 0) {
+    return <div className="...">暂无素材</div>
+  }
+  return <div>...</div>
+  ```
+
+## Composition Patterns
+- **Grid + Card**: `ContentGrid` renders a list of `ContentCard`; grid handles layout, card handles display.
+- **Form**: Self-contained form component (e.g., `UploadForm`) manages its own local state, calls hooks for API operations, reports success via `onSuccess` callback.
+- **Layout**: `Layout` provides shell (sidebar + `<Outlet />`); pages fill the outlet.
+
+## What Components MUST NOT Do
+- Import from `services/api.ts` directly — use hooks instead.
+- Perform navigation — let pages or hooks handle `useNavigate()`.
+- Access Zustand stores directly — use hooks (e.g., `useAuth()`) as a facade.
+  - Exception: `Layout` / `Sidebar` may use `useAuth()` for user info display.
+
+## Accessibility Basics
+- Interactive elements must be `<button>` or `<a>`, not `<div onClick>` (unless justified).
+- Images require `alt` text.
+- Form inputs require associated `<label>` elements.

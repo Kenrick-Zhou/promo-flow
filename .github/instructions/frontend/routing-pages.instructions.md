@@ -1,0 +1,110 @@
+---
+applyTo: "frontend/src/pages/*.tsx, frontend/src/App.tsx"
+---
+## Routing (`App.tsx`)
+
+### Router Setup
+- Use React Router v7 with `<BrowserRouter>`.
+- Route structure defined declaratively in `App.tsx`.
+
+### Route Structure
+```
+/login          → Login (public)
+/               → Dashboard (protected)
+/upload         → Upload (protected)
+/search         → Search (protected)
+/audit          → Audit (reviewer + admin)
+/admin          → Admin (admin only)
+```
+
+### Auth Guards
+Three wrapper components control access:
+
+```tsx
+function PrivateRoute({ children }: { children: React.ReactNode }) {
+  const token = useAuthStore((s) => s.token)
+  return token ? <>{children}</> : <Navigate to="/login" replace />
+}
+
+function AdminRoute({ children }: { children: React.ReactNode }) {
+  const user = useAuthStore((s) => s.user)
+  return user?.role === 'admin' ? <>{children}</> : <Navigate to="/" replace />
+}
+
+function ReviewerRoute({ children }: { children: React.ReactNode }) {
+  const user = useAuthStore((s) => s.user)
+  return user?.role === 'reviewer' || user?.role === 'admin'
+    ? <>{children}</>
+    : <Navigate to="/" replace />
+}
+```
+
+**Rules:**
+- `PrivateRoute` wraps the `<Layout />` element — all child routes inherit protection.
+- Role guards (`AdminRoute`, `ReviewerRoute`) wrap individual page elements inside the layout.
+- Guards read from `useAuthStore` directly (not `useAuth()` hook) for minimal overhead.
+- Always use `<Navigate replace />` to avoid back-button loops.
+
+### Adding New Routes
+1. Create page component in `pages/`.
+2. Add `<Route path="..." element={...} />` inside the layout route group.
+3. Add role guard wrapper if the page requires reviewer/admin access.
+4. Add nav item in `Sidebar.tsx` (conditionally by role if needed).
+
+## Pages (`pages/`)
+
+### Role
+- Pages are **route entry points**. They compose components, call hooks, and manage page-level state.
+- One file per route. File name matches the page function in PascalCase.
+
+### Page Pattern
+```tsx
+export default function Dashboard() {
+  // 1. Hooks
+  const { listContents, loading } = useContent()
+  const [items, setItems] = useState<Content[]>([])
+
+  // 2. Effects for data loading
+  useEffect(() => {
+    listContents({ ... }).then((r) => { setItems(r.items) })
+  }, [dependencies])
+
+  // 3. Event handlers
+  async function handleXxx() { ... }
+
+  // 4. Render
+  return (
+    <div>
+      <h1>...</h1>
+      {loading ? <LoadingState /> : <ContentGrid items={items} />}
+    </div>
+  )
+}
+```
+
+### Page Conventions
+- **Data fetching** via custom hooks (`useContent`, etc.), triggered in `useEffect`.
+- **Filter state** managed with `useState` — passed as params to hook methods.
+- **Loading/empty/error states** handled directly in the page JSX.
+- **No direct `api` imports** — use hooks. Exception: pages may call `api` directly for simple one-off operations not worth abstracting (e.g., `Search.tsx` RAG query), but prefer hooks for reusable operations.
+- Pages are the **only place** that calls `useNavigate()` for programmatic navigation.
+
+### Page Layout
+- Pages render inside `<Layout />` which provides the sidebar and main content area.
+- Page content fills `<main className="flex-1 p-6 overflow-auto">` provided by Layout's `<Outlet />`.
+- Consistent page header pattern:
+  ```tsx
+  <div className="flex items-center justify-between mb-6">
+    <h1 className="text-2xl font-bold text-gray-900">页面标题</h1>
+    <span className="text-sm text-gray-500">附加信息</span>
+  </div>
+  ```
+
+## Auth Flow
+1. User visits `/login` → clicks "飞书登录" → redirected to Feishu OAuth.
+2. Feishu redirects back to `/login?code=xxx`.
+3. `Login.tsx` detects `code` in URL params → calls `loginWithCode(code)`.
+4. `loginWithCode` calls `GET /api/v1/auth/callback?code=xxx` → receives `{ access_token, user }`.
+5. Token and user stored via `setAuth()` → redirected to `/`.
+6. Subsequent API calls attach JWT via axios interceptor.
+7. On 401 response, interceptor clears token and redirects to `/login`.

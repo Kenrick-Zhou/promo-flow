@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  backend-test:
+    name: Backend Tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: promoflow
+          POSTGRES_PASSWORD: promoflow  # pragma: allowlist secret
+          POSTGRES_DB: promoflow_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        run: |
+          cd backend
+          pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Run tests
+        env:
+          DATABASE_URL: postgresql+asyncpg://promoflow:promoflow@localhost:5432/promoflow_test  # pragma: allowlist secret
+          APP_SECRET_KEY: test-secret-key  # pragma: allowlist secret
+          FEISHU_APP_ID: test
+          FEISHU_APP_SECRET: test  # pragma: allowlist secret
+          FEISHU_VERIFICATION_TOKEN: test
+          FEISHU_ENCRYPT_KEY: test  # pragma: allowlist secret
+          DASHSCOPE_API_KEY: test  # pragma: allowlist secret
+          OSS_ACCESS_KEY_ID: test  # pragma: allowlist secret
+          OSS_ACCESS_KEY_SECRET: test  # pragma: allowlist secret
+          OSS_BUCKET_NAME: test
+          OSS_ENDPOINT: test
+        run: |
+          cd backend
+          pytest tests/ -v --tb=short
+
+  frontend-build:
+    name: Frontend Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install & build
+        run: |
+          cd frontend
+          npm ci
+          npm run build

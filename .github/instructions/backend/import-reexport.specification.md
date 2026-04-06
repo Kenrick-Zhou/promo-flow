@@ -1,0 +1,177 @@
+---
+applyTo: "backend/app/**/*.py"
+---
+# Import and Re-export Conventions
+
+This document defines the rules for organizing imports and re-exports across layers to maintain clear dependency boundaries and consistent import patterns.
+
+---
+
+## Layer Re-export Guidelines
+
+### `domains/`
+
+- Contains **pure domain types** only (dataclasses, Enums, value objects, Command/Result objects).
+- `__init__.py` may re-export enumerations, value objects, and command/result classes as "domain public models" for convenience.
+- **Never** expose anything that depends on external libraries (no Pydantic, no DB, no HTTP).
+- Currently, keeping an empty `__init__.py` and importing from specific modules (e.g., `from app.domains.auth import ...`) is acceptable.
+
+### `schemas/`
+
+- Typically **no re-exports needed**.
+- Each router imports directly from the corresponding schema module (e.g., `from app.schemas.user import ...`).
+- Keep `__init__.py` empty or minimal.
+
+### `services/`
+
+- `__init__.py` serves as the **façade** for each domain:
+  - Re-export service functions that routers need
+  - Re-export Command types if used by routers
+  - Re-export domain-specific error classes and `raise_<domain>_error()` function
+- **Do NOT export**: internal helpers, infrastructure details, private implementations.
+- Maintain a complete `__all__` list for all re-exported symbols.
+
+Example structure:
+```python
+# app/services/auth/__init__.py
+from .core import login_with_code
+from .errors import FeishuOAuthError, InvalidTokenError, raise_auth_error
+
+__all__ = [
+    "login_with_code",
+    "FeishuOAuthError",
+    "InvalidTokenError",
+    "raise_auth_error",
+]
+```
+
+### `routers/`
+
+- **No re-exports needed**.
+- Split by feature/functionality.
+- Central `router.py` aggregates all sub-routers via `include_router()`.
+
+---
+
+## Import Rules for Consumers
+
+### 1. Prefer Façade Imports
+
+Import from the domain façade when the symbol is re-exported:
+
+```python
+# ✅ Good - importing from façade
+from app.services.auth import raise_auth_error, login_with_code
+
+# ❌ Avoid - importing from submodule when façade re-exports it
+from app.services.auth.errors import raise_auth_error
+```
+
+Only import from submodules when:
+- The symbol is **not** re-exported by the façade
+- You are writing **tests** that need internal access
+
+### 2. Respect Layer Dependencies
+
+```
+routers  →  schemas, services, core
+services →  domains, models, infrastructure
+domains  →  (no app imports, standard library only)
+```
+
+- **routers**: May import from `schemas/`, `services/`, `core/`, `domains/`
+- **services**: May import from `domains/`, `models/`, `infrastructure/`
+- **domains**: Must NOT import from any other app layer
+
+### 3. Test Code Exception
+
+Test code is allowed to import directly from submodules for unit testing purposes:
+
+```python
+# tests/services/auth/test_core.py
+from app.services.auth.core import login_with_code  # OK in tests
+```
+
+However, avoid importing private functions (prefixed with `_`) unless doing white-box testing.
+
+### 4. When to Promote to Public API
+
+Evaluate whether to add a symbol to the façade re-exports when:
+
+- **2+ external callers** (from different modules) need it
+- It represents a **stable contract** of the domain
+- It is NOT a temporary helper or implementation detail
+
+Do NOT promote if:
+- Only one caller uses it
+- It may change frequently
+- It is an internal helper
+
+### 5. Maintain `__all__`
+
+All re-exported symbols in `__init__.py` must be listed in `__all__`:
+
+```python
+__all__ = [
+    # Error types
+    "FeishuOAuthError",
+    "raise_auth_error",
+    # Service functions
+    "login_with_code",
+]
+```
+
+This:
+- Clearly defines the public API
+- Enables lint tools to detect unexported internal symbols
+- Documents what the module intentionally exposes
+
+### 6. Refactoring Guidelines
+
+When refactoring:
+
+1. **Before removing a re-export**: Ensure all callers have migrated to direct submodule imports or alternative APIs.
+2. **Before adding a re-export**: Verify the symbol meets the "promote to public API" criteria above.
+3. **Prefer adjusting the façade first**: If multiple callers need the same internal function, consider promoting it rather than having everyone import from submodules.
+
+---
+
+## Quick Reference
+
+| Layer | Re-export in `__init__`? | Import Pattern |
+|-------|--------------------------|----------------|
+| `domains/` | Optional (enums, types) | `from app.domains.auth import FeishuLoginCommand` |
+| `schemas/` | No | `from app.schemas.user import TokenOut` |
+| `services/` | Yes (façade) | `from app.services.auth import raise_auth_error` |
+| `routers/` | No | N/A (entry points) |
+
+---
+
+## Examples
+
+### Correct Import Patterns
+
+```python
+# In a router file
+from app.schemas.content import ContentCreateIn, ContentOut
+from app.services.content import raise_content_error, create_content
+from app.core.deps import get_db, get_current_user
+
+# In a service file
+from app.domains.content import CreateContentCommand, ContentOutput
+from app.models.content import Content
+from app.services.infrastructure.storage import get_public_url
+```
+
+### Incorrect Import Patterns
+
+```python
+# ❌ Importing from submodule when façade re-exports it
+from app.services.auth.errors import raise_auth_error
+
+# ❌ Router importing directly from models (use services or deps for User)
+from app.models.content import Content  # Should go through services
+
+# ❌ Service importing from schemas
+from app.schemas.content import ContentCreateIn  # Services use domain types
+```

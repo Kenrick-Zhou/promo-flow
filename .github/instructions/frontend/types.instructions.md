@@ -1,0 +1,73 @@
+---
+applyTo: "frontend/src/types/*.ts"
+---
+## Role
+- **Single source of truth** for all TypeScript interfaces and type aliases shared across the frontend.
+- Types mirror the backend API contracts (`schemas/`) — keep them in sync.
+
+## File Organization
+- `types/index.ts` — All shared types. Split into domain-specific files (e.g., `types/content.ts`, `types/auth.ts`) only when the file grows beyond ~150 lines.
+
+## Conventions
+
+### Naming
+- **Interfaces** for object shapes: `User`, `Content`, `AuditLog`.
+- **Type aliases** for unions/literals: `ContentStatus`, `ContentType`, `UserRole`.
+- API response wrappers match backend schema names: `TokenOut`, `ContentListOut`.
+
+### Backend Alignment
+| Backend Schema | Frontend Type | Notes |
+|----------------|---------------|-------|
+| `UserOut` | `User` | Drop `Out` suffix for domain types used throughout |
+| `TokenOut` | `TokenOut` | Keep `Out` for API response wrappers |
+| `ContentOut` | `Content` | Drop `Out` suffix |
+| `ContentCreateIn` | `ContentCreate` | Drop `In` suffix |
+| `ContentListOut` | `ContentListOut` | Keep for paginated responses |
+| Enum values | String literal unions | `'pending' \| 'approved' \| 'rejected'` |
+
+### Type Patterns
+```typescript
+// String literal union (mirrors backend Enum)
+export type ContentStatus = 'pending' | 'approved' | 'rejected'
+export type ContentType = 'image' | 'video' | 'document'
+
+// Domain entity (mirrors backend response model)
+export interface Content {
+  id: number
+  title: string
+  description: string | null
+  tags: string[]
+  content_type: ContentType
+  status: ContentStatus
+  file_key: string
+  file_url: string | null
+  // ...
+}
+
+// API input (mirrors backend request model)
+export interface ContentCreate {
+  title: string
+  description?: string
+  tags: string[]
+  content_type: ContentType
+}
+
+// Paginated response
+export interface ContentListOut {
+  total: number
+  items: Content[]
+}
+```
+
+### Rules
+- Use `string | null` for nullable fields from backend (not `string | undefined`).
+- Use `optional` (`?`) for fields omitted in requests (not responses).
+- Dates arrive as ISO strings — type as `string`, parse with `new Date()` at display time.
+- Don't duplicate types that exist in `@/types` — import them.
+- **Never** use `any` for API response types. Define the shape even if partial.
+
+## Updating Types
+When the backend adds/changes fields:
+1. Update the interface in `types/index.ts`.
+2. Verify all consumers compile (`npm run build`).
+3. Update display logic in components if the field is user-visible.
