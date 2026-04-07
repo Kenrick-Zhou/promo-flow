@@ -26,7 +26,7 @@ export default function Sidebar() {
     <div className="flex h-screen w-60 flex-col justify-between border-e border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800 sticky top-0">
       <div className="px-4 py-6">
         <span className="grid h-10 w-full place-content-center rounded-lg bg-purple-50 text-lg font-bold tracking-wide text-purple-600 dark:bg-purple-900 dark:text-purple-300">
-          PromoFlow
+          方小集
         </span>
 
         <ul className="mt-6 space-y-1">

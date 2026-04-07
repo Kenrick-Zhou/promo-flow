@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { useAuthStore } from '@/store/auth'
 
 const api = axios.create({
   baseURL: '/api/v1',
@@ -19,7 +20,10 @@ api.interceptors.response.use(
   (res) => res,
   (err) => {
     if (err.response?.status === 401) {
-      localStorage.removeItem('access_token')
+      // Must call logout() to clear both `access_token` and the Zustand
+      // `auth-storage` key. Clearing only `access_token` leaves the persisted
+      // Zustand state intact, causing an infinite redirect loop on page reload.
+      useAuthStore.getState().logout()
       window.location.href = '/login'
     }
     return Promise.reject(err)

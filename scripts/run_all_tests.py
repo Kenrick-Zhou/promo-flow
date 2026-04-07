@@ -90,7 +90,7 @@ def main() -> None:
         sys.exit(0)
 
     print(f"\n{BOLD}{'=' * 54}{RESET}")
-    print(f"{BOLD}  PromoFlow — 集成连通性测试汇总{RESET}")
+    print(f"{BOLD}  方小集（PromoFlow）— 集成连通性测试汇总{RESET}")
     print(f"{BOLD}{'=' * 54}{RESET}\n")
 
     results: list[tuple[str, bool, float, str]] = []
