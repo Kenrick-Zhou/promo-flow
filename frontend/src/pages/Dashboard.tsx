@@ -36,13 +36,15 @@ export default function Dashboard() {
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">素材广场</h1>
-        <span className="text-sm text-gray-500">共 {total} 个素材</span>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">素材广场</h1>
+        <span className="rounded-full bg-gray-100 px-3 py-1 text-sm font-medium text-gray-600 dark:bg-gray-800 dark:text-gray-300">
+          共 {total} 个素材
+        </span>
       </div>
 
       <div className="flex gap-3 mb-6">
         <select
-          className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
+          className="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-700 shadow-sm focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
           value={status}
           onChange={(e) => setStatus(e.target.value as ContentStatus | '')}
         >
@@ -53,7 +55,7 @@ export default function Dashboard() {
           ))}
         </select>
         <select
-          className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
+          className="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-700 shadow-sm focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
           value={contentType}
           onChange={(e) => setContentType(e.target.value as ContentType | '')}
         >
@@ -66,7 +68,7 @@ export default function Dashboard() {
       </div>
 
       {loading ? (
-        <div className="flex justify-center py-20 text-gray-400">加载中...</div>
+        <div className="flex justify-center py-20 text-gray-400 dark:text-gray-500">加载中...</div>
       ) : (
         <ContentGrid items={items} />
       )}

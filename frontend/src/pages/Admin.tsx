@@ -33,23 +33,34 @@ export default function Admin() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">管理设置</h1>
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <h1 className="text-2xl font-bold text-gray-900 mb-6 dark:text-white">管理设置</h1>
+      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50 border-b border-gray-200">
+          <thead className="border-b border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-900">
             <tr>
-              <th className="px-4 py-3 text-left font-medium text-gray-600">姓名</th>
-              <th className="px-4 py-3 text-left font-medium text-gray-600">角色</th>
-              <th className="px-4 py-3 text-left font-medium text-gray-600">加入时间</th>
+              <th className="whitespace-nowrap px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-300">
+                姓名
+              </th>
+              <th className="whitespace-nowrap px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-300">
+                角色
+              </th>
+              <th className="whitespace-nowrap px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-300">
+                加入时间
+              </th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
+          <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
             {users.map((user) => (
-              <tr key={user.id}>
-                <td className="px-4 py-3 text-gray-900">{user.name}</td>
-                <td className="px-4 py-3">
+              <tr
+                key={user.id}
+                className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+              >
+                <td className="whitespace-nowrap px-4 py-3 font-medium text-gray-900 dark:text-white">
+                  {user.name}
+                </td>
+                <td className="whitespace-nowrap px-4 py-3">
                   <select
-                    className="border border-gray-300 rounded px-2 py-1 text-xs"
+                    className="rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-xs text-gray-700 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
                     value={user.role}
                     onChange={(e) => handleRoleChange(user.id, e.target.value)}
                   >
@@ -60,7 +71,7 @@ export default function Admin() {
                     ))}
                   </select>
                 </td>
-                <td className="px-4 py-3 text-gray-500">
+                <td className="whitespace-nowrap px-4 py-3 text-gray-500 dark:text-gray-400">
                   {new Date(user.created_at).toLocaleDateString('zh-CN')}
                 </td>
               </tr>
@@ -68,7 +79,7 @@ export default function Admin() {
           </tbody>
         </table>
         {!loading && users.length === 0 && (
-          <p className="text-center py-10 text-gray-400">暂无用户</p>
+          <p className="text-center py-10 text-gray-400 dark:text-gray-500">暂无用户</p>
         )}
       </div>
     </div>

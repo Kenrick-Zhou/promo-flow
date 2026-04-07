@@ -9,6 +9,7 @@ applyTo: "frontend/src/**/*.ts, frontend/src/**/*.tsx, frontend/vite.config.ts, 
 - **HTTP**: Axios (single instance with interceptors)
 - **Routing**: React Router v7
 - **Icons**: `lucide-react` (available, use as needed)
+- **UI Patterns**: [HyperUI](https://www.hyperui.dev/) — free Tailwind CSS component reference. Copy and adapt patterns; no npm package needed.
 - **Lint**: ESLint 9 flat config + TypeScript ESLint + React Hooks/Refresh
 
 ## Scripts

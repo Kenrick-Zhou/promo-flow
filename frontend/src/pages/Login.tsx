@@ -35,14 +35,14 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="bg-white rounded-2xl shadow-lg p-10 w-80 text-center">
+    <div className="flex min-h-screen items-center justify-center bg-gray-50 dark:bg-gray-900">
+      <div className="w-full max-w-sm rounded-2xl border border-gray-200 bg-white p-10 text-center shadow-lg dark:border-gray-700 dark:bg-gray-800">
         <div className="text-5xl mb-4">📢</div>
-        <h1 className="text-2xl font-bold text-gray-900 mb-1">PromoFlow</h1>
-        <p className="text-sm text-gray-500 mb-8">营销内容管理平台</p>
+        <h1 className="text-2xl font-bold text-gray-900 mb-1 dark:text-white">PromoFlow</h1>
+        <p className="text-sm text-gray-500 mb-8 dark:text-gray-400">营销内容管理平台</p>
         <button
           onClick={handleFeishuLogin}
-          className="w-full bg-blue-500 text-white py-3 rounded-xl font-medium hover:bg-blue-600 transition-colors"
+          className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-500 py-3 text-sm font-medium text-white shadow-sm transition hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 dark:focus:ring-offset-gray-800"
         >
           飞书登录
         </button>

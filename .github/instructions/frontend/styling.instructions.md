@@ -95,6 +95,23 @@ const badge = cva('text-xs px-2 py-0.5 rounded-full', {
 })
 ```
 
+## HyperUI Component Patterns
+- **Reference**: [HyperUI](https://www.hyperui.dev/) is the project's Tailwind component reference library.
+- HyperUI is **not an npm package** — it provides copy-paste Tailwind CSS patterns for common UI elements.
+- When building new components, **check HyperUI first** for existing patterns (sidebar, card, form, table, badge, alert, etc.).
+- Adapt HyperUI patterns to use the project's brand colors and design tokens.
+- Key HyperUI categories used in this project:
+  | UI Element | HyperUI Category |
+  |-----------|------------------|
+  | Sidebar nav | Application UI → Side Menu |
+  | Cards | Marketing → Blog Cards / Application UI → Cards |
+  | Forms | Application UI → Inputs, Selects, Textareas |
+  | Tables | Application UI → Tables |
+  | Badges / Tags | Application UI → Badges |
+  | Buttons | Application UI → Button Groups |
+  | Empty states | Marketing → Error Pages (adapt) |
+- When communicating layout intent to AI, reference HyperUI component names for clarity (e.g., "use a HyperUI Side Menu pattern with icon + text nav items").
+
 ## UI Language
 - All user-visible text in **中文** (Chinese).
 - Use `zh-CN` locale for date formatting: `new Date(iso).toLocaleDateString('zh-CN')`.

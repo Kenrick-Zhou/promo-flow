@@ -38,11 +38,17 @@ export default function UploadForm({ onSuccess }: { onSuccess?: () => void }) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4 max-w-lg">
+    <form onSubmit={handleSubmit} className="space-y-5 max-w-lg">
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">素材类型</label>
+        <label
+          htmlFor="content-type"
+          className="block text-sm font-medium text-gray-700 dark:text-gray-200"
+        >
+          素材类型
+        </label>
         <select
-          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+          id="content-type"
+          className="mt-1.5 w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-700 shadow-sm focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
           value={contentType}
           onChange={(e) => setContentType(e.target.value as ContentType)}
         >
@@ -55,19 +61,32 @@ export default function UploadForm({ onSuccess }: { onSuccess?: () => void }) {
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">选择文件</label>
+        <label
+          htmlFor="file-input"
+          className="block text-sm font-medium text-gray-700 dark:text-gray-200"
+        >
+          选择文件
+        </label>
         <input
+          id="file-input"
           type="file"
-          className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100"
+          className="mt-1.5 w-full text-sm text-gray-500 file:mr-4 file:rounded-lg file:border-0 file:bg-purple-50 file:px-4 file:py-2.5 file:text-sm file:font-medium file:text-purple-700 hover:file:bg-purple-100 dark:text-gray-400 dark:file:bg-purple-900/30 dark:file:text-purple-300"
           onChange={(e) => setFile(e.target.files?.[0] ?? null)}
           required
         />
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">标题</label>
+        <label
+          htmlFor="title"
+          className="block text-sm font-medium text-gray-700 dark:text-gray-200"
+        >
+          标题
+        </label>
         <input
-          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+          id="title"
+          type="text"
+          className="mt-1.5 w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-700 shadow-sm focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           required
@@ -76,9 +95,15 @@ export default function UploadForm({ onSuccess }: { onSuccess?: () => void }) {
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">描述（可选）</label>
+        <label
+          htmlFor="description"
+          className="block text-sm font-medium text-gray-700 dark:text-gray-200"
+        >
+          描述（可选）
+        </label>
         <textarea
-          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none"
+          id="description"
+          className="mt-1.5 w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-700 shadow-sm focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
           rows={3}
           value={description}
           onChange={(e) => setDescription(e.target.value)}
@@ -86,21 +111,32 @@ export default function UploadForm({ onSuccess }: { onSuccess?: () => void }) {
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">标签（逗号分隔）</label>
+        <label
+          htmlFor="tags"
+          className="block text-sm font-medium text-gray-700 dark:text-gray-200"
+        >
+          标签（逗号分隔）
+        </label>
         <input
-          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+          id="tags"
+          type="text"
+          className="mt-1.5 w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-700 shadow-sm focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
           value={tags}
           onChange={(e) => setTags(e.target.value)}
           placeholder="营销,促销,夏季"
         />
       </div>
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400">
+          {error}
+        </div>
+      )}
 
       <button
         type="submit"
         disabled={loading}
-        className="w-full bg-purple-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-purple-700 disabled:opacity-50"
+        className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-purple-600 px-5 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed dark:focus:ring-offset-gray-900"
       >
         {loading ? '上传中...' : '提交上传'}
       </button>

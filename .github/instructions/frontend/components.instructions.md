@@ -78,6 +78,12 @@ export default function ContentCard({ content, onClick }: Props) { ... }
 - Access Zustand stores directly — use hooks (e.g., `useAuth()`) as a facade.
   - Exception: `Layout` / `Sidebar` may use `useAuth()` for user info display.
 
+## HyperUI Patterns
+- Use [HyperUI](https://www.hyperui.dev/) as the primary reference for component styling patterns.
+- When creating a new component, browse the relevant HyperUI category first and adapt the pattern.
+- HyperUI patterns come with built-in hover/focus states, transitions, and responsive design.
+- Common adaptations: replace HyperUI's default colors with project brand colors (`purple-600`, etc.).
+
 ## Accessibility Basics
 - Interactive elements must be `<button>` or `<a>`, not `<div onClick>` (unless justified).
 - Images require `alt` text.
