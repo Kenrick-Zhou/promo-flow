@@ -20,6 +20,7 @@ from app.schemas.content import (
 from app.services.content import (
     ContentForbiddenError,
     ContentNotFoundError,
+    InvalidCategoryError,
     create_content,
     delete_content,
     get_content,
@@ -63,7 +64,7 @@ async def create_content_route(
             db,
             command=data.to_domain(uploaded_by=current_user.id),
         )
-    except (ContentNotFoundError, ContentForbiddenError) as exc:
+    except (ContentNotFoundError, ContentForbiddenError, InvalidCategoryError) as exc:
         raise_content_error(exc)
 
     background_tasks.add_task(
@@ -125,7 +126,7 @@ async def update_content_route(
             user_id=current_user.id,
             user_role=current_user.role.value,
         )
-    except (ContentNotFoundError, ContentForbiddenError) as exc:
+    except (ContentNotFoundError, ContentForbiddenError, InvalidCategoryError) as exc:
         raise_content_error(exc)
     return ContentOut.from_domain(output)
 

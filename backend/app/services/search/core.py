@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.domains.content import (
     ContentOutput,
@@ -12,16 +13,18 @@ from app.domains.content import (
     SearchContentCommand,
     SearchResultOutput,
 )
+from app.models.category import Category
 from app.models.content import Content
 
 
 def _content_to_output(content: Content) -> ContentOutput:
     """Convert ORM Content to domain output."""
+    category: Category | None = content.category  # type: ignore[assignment]
     return ContentOutput(
         id=content.id,
         title=content.title,
         description=content.description,
-        tags=content.tags or [],
+        tags=[t.name for t in content.tag_objects],
         content_type=ContentType(content.content_type),
         status=ContentStatus(content.status),
         file_key=content.file_key,
@@ -30,6 +33,11 @@ def _content_to_output(content: Content) -> ContentOutput:
         ai_summary=content.ai_summary,
         ai_keywords=content.ai_keywords or [],
         uploaded_by=content.uploaded_by,
+        category_id=content.category_id,
+        category_name=category.name if category else None,
+        primary_category_name=(
+            category.parent.name if category and category.parent else None
+        ),
         created_at=str(content.created_at),
         updated_at=str(content.updated_at),
     )
@@ -75,7 +83,14 @@ async def semantic_search(
     ids = [row.id for row in rows]
     scores = {row.id: row.score for row in rows}
 
-    contents_result = await db.execute(select(Content).where(Content.id.in_(ids)))
+    contents_result = await db.execute(
+        select(Content)
+        .where(Content.id.in_(ids))
+        .options(
+            selectinload(Content.tag_objects),
+            selectinload(Content.category).selectinload(Category.parent),
+        )
+    )
     contents = {c.id: c for c in contents_result.scalars().all()}
 
     return [

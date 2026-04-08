@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import joinedload, selectinload
 
 from app.domains.content import (
     AuditContentCommand,
@@ -17,21 +18,31 @@ from app.domains.content import (
     UpdateContentCommand,
 )
 from app.models.audit_log import AuditLog
+from app.models.category import Category
 from app.models.content import Content
+from app.models.tag import Tag
 from app.services.content.errors import (
     ContentForbiddenError,
     ContentNotFoundError,
     InvalidAuditActionError,
+    InvalidCategoryError,
 )
+
+# Eager-loading options for Content queries
+_CONTENT_LOAD_OPTIONS = [
+    selectinload(Content.tag_objects),
+    joinedload(Content.category).joinedload(Category.parent),
+]
 
 
 def _content_to_output(content: Content) -> ContentOutput:
     """Convert ORM Content to domain output."""
+    category = content.category
     return ContentOutput(
         id=content.id,
         title=content.title,
         description=content.description,
-        tags=content.tags or [],
+        tags=[t.name for t in content.tag_objects],
         content_type=ContentType(content.content_type),
         status=ContentStatus(content.status),
         file_key=content.file_key,
@@ -40,9 +51,41 @@ def _content_to_output(content: Content) -> ContentOutput:
         ai_summary=content.ai_summary,
         ai_keywords=content.ai_keywords or [],
         uploaded_by=content.uploaded_by,
+        category_id=content.category_id,
+        category_name=category.name if category else None,
+        primary_category_name=(
+            category.parent.name if category and category.parent else None
+        ),
         created_at=str(content.created_at),
         updated_at=str(content.updated_at),
     )
+
+
+async def _find_or_create_tags(db: AsyncSession, names: list[str]) -> list[Tag]:
+    """Find existing tags or create new ones by name."""
+    if not names:
+        return []
+    # Strip whitespace and deduplicate while preserving order
+    unique_names = list(dict.fromkeys(n.strip() for n in names if n.strip()))
+    if not unique_names:
+        return []
+
+    result = await db.execute(select(Tag).where(Tag.name.in_(unique_names)))
+    existing = {t.name: t for t in result.scalars().all()}
+
+    tags = []
+    for name in unique_names:
+        if name in existing:
+            tags.append(existing[name])
+        else:
+            tag = Tag(name=name, is_system=False)
+            db.add(tag)
+            tags.append(tag)
+
+    if any(t.id is None for t in tags):
+        await db.flush()  # Ensure new tags get IDs
+
+    return tags
 
 
 async def create_content(
@@ -51,23 +94,39 @@ async def create_content(
     command: CreateContentCommand,
 ) -> ContentOutput:
     """Create new content record."""
+    # Validate category exists and is a secondary (child) category
+    category = await db.get(Category, command.category_id)
+    if category is None:
+        raise InvalidCategoryError("指定的类目不存在。")
+    if category.parent_id is None:
+        raise InvalidCategoryError("素材必须归属到二级类目。")
+
+    # Find or create tags
+    tags = await _find_or_create_tags(db, command.tag_names)
+
     content = Content(
         title=command.title,
         description=command.description,
-        tags=command.tags,
         content_type=command.content_type,
         file_key=command.file_key,
         uploaded_by=command.uploaded_by,
+        category_id=command.category_id,
     )
+    content.tag_objects = tags
     db.add(content)
+    await db.flush()
+    content_id = content.id
     await db.commit()
-    await db.refresh(content)
-    return _content_to_output(content)
+    # Re-query with full relationship loading
+    return await get_content(db, content_id)
 
 
 async def get_content(db: AsyncSession, content_id: int) -> ContentOutput:
     """Fetch a single content by ID. Raises ContentNotFoundError if not found."""
-    content = await db.get(Content, content_id)
+    result = await db.execute(
+        select(Content).where(Content.id == content_id).options(*_CONTENT_LOAD_OPTIONS)
+    )
+    content = result.unique().scalars().first()
     if content is None:
         raise ContentNotFoundError(content_id=content_id)
     return _content_to_output(content)
@@ -75,7 +134,10 @@ async def get_content(db: AsyncSession, content_id: int) -> ContentOutput:
 
 async def get_content_orm(db: AsyncSession, content_id: int) -> Content:
     """Internal: fetch ORM Content by ID. Raises ContentNotFoundError if not found."""
-    content = await db.get(Content, content_id)
+    result = await db.execute(
+        select(Content).where(Content.id == content_id).options(*_CONTENT_LOAD_OPTIONS)
+    )
+    content = result.unique().scalars().first()
     if content is None:
         raise ContentNotFoundError(content_id=content_id)
     return content
@@ -91,7 +153,7 @@ async def list_contents(
     limit: int = 20,
 ) -> ContentListOutput:
     """List contents with filtering and pagination."""
-    stmt = select(Content)
+    stmt = select(Content).options(*_CONTENT_LOAD_OPTIONS)
     count_stmt = select(func.count()).select_from(Content)
 
     if status:
@@ -111,6 +173,7 @@ async def list_contents(
                 stmt.offset(offset).limit(limit).order_by(Content.created_at.desc())
             )
         )
+        .unique()
         .scalars()
         .all()
     )
@@ -138,12 +201,19 @@ async def update_content(
         content.title = command.title
     if command.description is not None:
         content.description = command.description
-    if command.tags is not None:
-        content.tags = command.tags
+    if command.tag_names is not None:
+        content.tag_objects = await _find_or_create_tags(db, command.tag_names)
+    if command.category_id is not None:
+        # Validate category
+        category = await db.get(Category, command.category_id)
+        if category is None:
+            raise InvalidCategoryError("指定的类目不存在。")
+        if category.parent_id is None:
+            raise InvalidCategoryError("素材必须归属到二级类目。")
+        content.category_id = command.category_id
 
     await db.commit()
-    await db.refresh(content)
-    return _content_to_output(content)
+    return await get_content(db, content_id)
 
 
 async def delete_content(

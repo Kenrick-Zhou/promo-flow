@@ -35,11 +35,7 @@ export function useContent() {
 
   const createContent = useCallback(
     async (payload: ContentCreate & { file_key: string }): Promise<Content> => {
-      const { file_key, ...body } = payload
-      const { data } = await api.post<Content>(
-        `/contents?file_key=${encodeURIComponent(file_key)}`,
-        body,
-      )
+      const { data } = await api.post<Content>('/contents', payload)
       return data
     },
     [],

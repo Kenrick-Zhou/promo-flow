@@ -14,6 +14,7 @@ from app.services.content.errors import (
     ContentForbiddenError,
     ContentNotFoundError,
     InvalidAuditActionError,
+    InvalidCategoryError,
     raise_content_error,
 )
 
@@ -29,5 +30,6 @@ __all__ = [
     "ContentForbiddenError",
     "ContentNotFoundError",
     "InvalidAuditActionError",
+    "InvalidCategoryError",
     "raise_content_error",
 ]

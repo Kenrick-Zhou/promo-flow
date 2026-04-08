@@ -34,6 +34,13 @@ class InvalidAuditActionError(Exception):
         super().__init__(message)
 
 
+class InvalidCategoryError(Exception):
+    """Raised when content is assigned to an invalid category."""
+
+    def __init__(self, message: str = "invalid_category"):
+        super().__init__(message)
+
+
 # ============================================================
 # HTTP Error Mapping
 # ============================================================
@@ -65,6 +72,15 @@ def raise_content_error(exc: Exception) -> NoReturn:
             detail={
                 "error_code": "invalid_audit_action",
                 "message": "Audit status must be 'approved' or 'rejected'.",
+            },
+        ) from exc
+
+    if isinstance(exc, InvalidCategoryError):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "error_code": "invalid_category",
+                "message": str(exc),
             },
         ) from exc
 

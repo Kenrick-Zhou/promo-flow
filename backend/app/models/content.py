@@ -8,9 +8,12 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base_class import Base
 from app.domains.content import ContentStatus, ContentType
+from app.models.tag import content_tags
 
 if TYPE_CHECKING:
     from app.models.audit_log import AuditLog
+    from app.models.category import Category
+    from app.models.tag import Tag
     from app.models.user import User
 
 EMBEDDING_DIM = 1024  # DashScope text-embedding-v3
@@ -22,7 +25,6 @@ class Content(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     title: Mapped[str] = mapped_column(String(256), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    tags: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
     content_type: Mapped[ContentType] = mapped_column(
         Enum(ContentType, native_enum=False), nullable=False
     )
@@ -44,6 +46,11 @@ class Content(Base):
     ai_keywords: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
     embedding: Mapped[list | None] = mapped_column(Vector(EMBEDDING_DIM), nullable=True)
 
+    # Category (secondary/leaf category)
+    category_id: Mapped[int | None] = mapped_column(
+        ForeignKey("categories.id"), nullable=True
+    )
+
     uploaded_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -59,3 +66,5 @@ class Content(Base):
     audit_logs: Mapped[list["AuditLog"]] = relationship(
         "AuditLog", back_populates="content", cascade="all, delete-orphan"
     )
+    category: Mapped["Category | None"] = relationship("Category")
+    tag_objects: Mapped[list["Tag"]] = relationship("Tag", secondary=content_tags)

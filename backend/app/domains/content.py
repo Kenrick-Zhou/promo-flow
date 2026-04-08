@@ -52,10 +52,11 @@ class CreateContentCommand:
 
     title: str
     description: str | None
-    tags: list[str]
+    tag_names: list[str]
     content_type: ContentType
     file_key: str
     uploaded_by: int
+    category_id: int
 
 
 @dataclass(slots=True)
@@ -64,7 +65,8 @@ class UpdateContentCommand:
 
     title: str | None = None
     description: str | None = None
-    tags: list[str] | None = None
+    tag_names: list[str] | None = None
+    category_id: int | None = None
 
 
 @dataclass(slots=True)
@@ -107,6 +109,9 @@ class ContentOutput:
     ai_summary: str | None
     ai_keywords: list[str]
     uploaded_by: int
+    category_id: int | None
+    category_name: str | None
+    primary_category_name: str | None
     created_at: str
     updated_at: str
 

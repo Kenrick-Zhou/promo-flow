@@ -15,33 +15,37 @@ from app.domains.content import (
 class ContentCreateIn(BaseModel):
     title: str = Field(..., max_length=256)
     description: str | None = None
-    tags: list[str] = []
+    tag_names: list[str] = []
     content_type: ContentType
     file_key: str
+    category_id: int
 
     def to_domain(self, *, uploaded_by: int) -> CreateContentCommand:
         """Convert HTTP request to domain command."""
         return CreateContentCommand(
             title=self.title,
             description=self.description,
-            tags=self.tags,
+            tag_names=self.tag_names,
             content_type=self.content_type,
             file_key=self.file_key,
             uploaded_by=uploaded_by,
+            category_id=self.category_id,
         )
 
 
 class ContentUpdateIn(BaseModel):
     title: str | None = Field(None, max_length=256)
     description: str | None = None
-    tags: list[str] | None = None
+    tag_names: list[str] | None = None
+    category_id: int | None = None
 
     def to_domain(self) -> UpdateContentCommand:
         """Convert HTTP request to domain command."""
         return UpdateContentCommand(
             title=self.title,
             description=self.description,
-            tags=self.tags,
+            tag_names=self.tag_names,
+            category_id=self.category_id,
         )
 
 
@@ -58,6 +62,9 @@ class ContentOut(BaseModel):
     ai_summary: str | None
     ai_keywords: list[str]
     uploaded_by: int
+    category_id: int | None
+    category_name: str | None
+    primary_category_name: str | None
     created_at: str
     updated_at: str
 
@@ -77,6 +84,9 @@ class ContentOut(BaseModel):
             ai_summary=output.ai_summary,
             ai_keywords=output.ai_keywords,
             uploaded_by=output.uploaded_by,
+            category_id=output.category_id,
+            category_name=output.category_name,
+            primary_category_name=output.primary_category_name,
             created_at=output.created_at,
             updated_at=output.updated_at,
         )
