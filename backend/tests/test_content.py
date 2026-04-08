@@ -12,4 +12,4 @@ async def test_health(client: AsyncClient):
 @pytest.mark.asyncio
 async def test_list_contents_unauthenticated(client: AsyncClient):
     resp = await client.get("/api/v1/contents")
-    assert resp.status_code == 403
+    assert resp.status_code == 401
