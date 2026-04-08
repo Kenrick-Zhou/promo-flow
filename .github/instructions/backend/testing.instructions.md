@@ -4,16 +4,68 @@ applyTo: "backend/tests/**"
 ## Golden Rules
 - Unit tests cover `services` and pure functions; routes use `TestClient` or async client for integration tests.
 - Use `pytest-asyncio` for async tests; avoid blocking I/O in the event loop.
-- Service tests for async functions must use `@pytest.mark.asyncio` and `db` fixture (returns `AsyncSession`).
+- With `asyncio_mode = "auto"` in `pyproject.toml`, `@pytest.mark.asyncio` is optional but still acceptable to be explicit.
 - Use SQLAlchemy 2.0 `select()` for test assertions: `result = await db.execute(select(Model))`; `obj = result.scalars().first()`.
 - Fixtures live in `tests/conftest.py` for reuse and isolation.
 
+## pytest Configuration (`pyproject.toml`)
+
+```toml
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
+```
+
+**Critical**: Both `asyncio_default_fixture_loop_scope` and `asyncio_default_test_loop_scope` must be `"session"`. If they differ (e.g., fixtures=session, tests=function), asyncpg connections created in the session-scoped engine will fail with "Future attached to a different loop" when used inside Starlette's `BaseHTTPMiddleware` task group.
+
+## Test Database Setup
+
+- Tests read `DATABASE_URL` from `.env.test` at the project root (falls back to `.env`).
+- `.env.test` is gitignored (`.env.*` pattern). Copy `.env.test.example` to create it.
+- The test engine **must use `NullPool`** to prevent asyncpg from reusing connections across anyio task boundaries:
+
+```python
+from sqlalchemy.pool import NullPool
+engine = create_async_engine(db_url, poolclass=NullPool)
+```
+
+- **Do NOT** use transaction-level rollback (savepoint) for test isolation with this stack. Starlette's `BaseHTTPMiddleware` spawns tasks inside an anyio task group; the shared connection held open for savepoints is inaccessible from those tasks, causing `MissingGreenlet` errors.
+
+## Test Data Isolation
+
+Use the **`TEST_PREFIX = "__pytest__"`** naming convention:
+
+- All test-created rows use names/identifiers starting with `__pytest__`.
+- A session-scoped `autouse` fixture performs bulk cleanup after the full test session:
+
+```python
+@pytest_asyncio.fixture(scope="session", autouse=True)
+async def cleanup_test_data(engine):
+    yield
+    async with AsyncSession(engine) as session:
+        await session.execute(text("DELETE FROM tags WHERE name LIKE :p"), {"p": "__pytest__%"})
+        await session.execute(text("DELETE FROM categories WHERE name LIKE :p"), {"p": "__pytest__%"})
+        await session.execute(text("DELETE FROM users WHERE feishu_open_id LIKE :p"), {"p": "__pytest__%"})
+        await session.commit()
+```
+
+- Within a single test run, use a per-run unique suffix (e.g., `uuid4().hex[:8]`) to avoid name conflicts between parallel or repeated runs:
+
+```python
+_RUN = uuid.uuid4().hex[:8]
+
+def _n(name: str) -> str:
+    return f"__pytest__{_RUN}_{name}"
+```
+
 ## Minimum Verifiability
 - For each new public API or service logic, provide at least one positive and one negative case.
-- Negative tests for routes should assert unified error contract:
-  - Body contains `error_code`, `message`.
+- Negative tests for routes should assert the unified error contract:
+  - Body keys `error_code` and `message` at the **top level** (not nested under `detail`).
   - Header contains `X-Request-ID`.
   - For `422` validation failures, expect `error_code == "validation_error"` and `message == "Validation failed"`.
+- **Unauthenticated requests return `401`** (not `403`). `HTTPBearer` returns 403 in older Starlette but the app's custom HTTPException handler normalizes to 401 for missing credentials. Always test unauthenticated cases against `401`.
 - Mock external calls via `respx`/`pytest-mock`; avoid real network requests.
 - Mock AI services (DashScope, OpenAI) and OSS storage in tests.
 
@@ -25,5 +77,27 @@ applyTo: "backend/tests/**"
 - Each test file corresponds to an implementation module.
 
 ## Auth Helpers for Tests
-- When testing authenticated endpoints, create helper fixtures that provide a valid JWT token and test user.
-- Use `get_current_user` override in `app.dependency_overrides` to inject test users without real Feishu OAuth.
+- When testing authenticated endpoints, create `User` ORM objects in the `db` fixture and override `get_current_user`:
+
+```python
+@pytest_asyncio.fixture
+async def admin_user(db: AsyncSession) -> User:
+    user = User(
+        feishu_open_id=_n("admin"),
+        feishu_union_id=_n("union_a"),
+        name="测试管理员",
+        role=UserRole.admin,
+    )
+    db.add(user)
+    await db.commit()
+    return user
+
+@pytest_asyncio.fixture
+async def admin_client(client: AsyncClient, admin_user: User) -> AsyncClient:
+    app.dependency_overrides[get_current_user] = lambda: admin_user
+    yield client
+    app.dependency_overrides.pop(get_current_user, None)
+```
+
+- **Do not** generate JWT tokens in tests; use `dependency_overrides` directly.
+- **Do not** assert that a list endpoint returns an empty list — the shared dev database may already have data. Assert `isinstance(resp.json(), list)` instead.

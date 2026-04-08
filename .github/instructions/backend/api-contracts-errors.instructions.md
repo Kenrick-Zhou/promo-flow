@@ -4,8 +4,10 @@ applyTo: "backend/app/routers/*.py, backend/app/schemas/*.py, backend/tests/**"
 ## Unified Response Structure
 - Success: return response models defined in `schemas`; avoid constructing dicts in routes.
 - Failure: raise `HTTPException` with `detail` shaped as `{ "error_code": string, "message": string }`.
-  - `RequestIdMiddleware` injects `X-Request-ID` header and `request_id` into error responses automatically.
-  - `details` is optional and not returned by default. Introduce only when needed and keep contracts backward-compatible.
+  - The custom `HTTPException` handler in `app/core/middleware.py` flattens the `detail` dict to the **top level** of the response body and injects `request_id`. This is NOT automatic from FastAPI/Starlette — the handler is required.
+  - The `RequestIdMiddleware` injects `X-Request-ID` into response headers.
+
+> **Important**: The error body format `{"error_code": ..., "message": ..., "request_id": ...}` at the top level only works because `register_exception_handlers()` in `middleware.py` registers a custom `StarletteHTTPException` handler. Without it, FastAPI wraps `detail` under `{"detail": {...}}`. Do not remove this handler.
 
 ## Suggested Error Classes
 - `400` Parameter/business validation failure
