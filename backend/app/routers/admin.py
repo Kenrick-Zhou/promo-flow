@@ -16,6 +16,7 @@ from app.schemas.system import (
     CategoryUpdateIn,
     TagCreateIn,
     TagOut,
+    TagReorderIn,
     TagUpdateIn,
 )
 from app.schemas.user import RoleUpdateIn, UserOut
@@ -38,6 +39,7 @@ from app.services.system import (
     delete_category,
     delete_tag,
     raise_system_error,
+    reorder_tags,
     update_category,
     update_tag,
 )
@@ -194,3 +196,21 @@ async def delete_tag_route(
         await delete_tag(db, tag_id)
     except (TagNotFoundError, TagInUseError) as exc:
         raise_system_error(exc)
+
+
+@router.put(
+    "/tags/reorder",
+    response_model=list[TagOut],
+    summary="批量调整系统标签顺序",
+    description="传入标签 id 与目标 sort_order 的列表，批量更新顺序。",
+)
+async def reorder_tags_route(
+    data: TagReorderIn,
+    current_user: Annotated[User, Depends(_admin_only)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> list[TagOut]:
+    try:
+        tags = await reorder_tags(db, command=data.to_domain())
+    except TagNotFoundError as exc:
+        raise_system_error(exc)
+    return [TagOut.from_domain(t) for t in tags]

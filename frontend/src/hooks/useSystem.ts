@@ -7,6 +7,7 @@ import type {
   CategoryUpdate,
   Tag,
   TagCreate,
+  TagReorderItem,
   TagUpdate,
 } from '@/types'
 
@@ -81,6 +82,11 @@ export function useSystem() {
     await api.delete(`/admin/tags/${id}`)
   }, [])
 
+  const reorderTags = useCallback(async (items: TagReorderItem[]): Promise<Tag[]> => {
+    const { data } = await api.put<Tag[]>('/admin/tags/reorder', { items })
+    return data
+  }, [])
+
   return {
     loading,
     error,
@@ -92,5 +98,6 @@ export function useSystem() {
     createTag,
     updateTag,
     deleteTag,
+    reorderTags,
   }
 }

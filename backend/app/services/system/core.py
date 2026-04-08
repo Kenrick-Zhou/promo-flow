@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -11,6 +11,7 @@ from app.domains.system import (
     CategoryTreeOutput,
     CreateCategoryCommand,
     CreateTagCommand,
+    ReorderTagsCommand,
     TagOutput,
     UpdateCategoryCommand,
     UpdateTagCommand,
@@ -198,6 +199,7 @@ def _tag_to_output(tag: Tag) -> TagOutput:
         id=tag.id,
         name=tag.name,
         is_system=tag.is_system,
+        sort_order=tag.sort_order,
         created_at=str(tag.created_at),
     )
 
@@ -208,8 +210,10 @@ def _tag_to_output(tag: Tag) -> TagOutput:
 
 
 async def list_tags(db: AsyncSession) -> list[TagOutput]:
-    """List all tags, system tags first."""
-    result = await db.execute(select(Tag).order_by(Tag.is_system.desc(), Tag.name))
+    """List all tags, system tags first (ordered by sort_order, then name)."""
+    result = await db.execute(
+        select(Tag).order_by(Tag.is_system.desc(), Tag.sort_order, Tag.name)
+    )
     return [_tag_to_output(t) for t in result.scalars().all()]
 
 
@@ -229,7 +233,9 @@ async def create_tag(
     if existing.scalars().first() is not None:
         raise DuplicateTagError(name=command.name)
 
-    tag = Tag(name=command.name, is_system=command.is_system)
+    tag = Tag(
+        name=command.name, is_system=command.is_system, sort_order=command.sort_order
+    )
     db.add(tag)
     await db.commit()
     await db.refresh(tag)
@@ -257,9 +263,37 @@ async def update_tag(
     if command.is_system is not None:
         tag.is_system = command.is_system
 
+    if command.sort_order is not None:
+        tag.sort_order = command.sort_order
+
     await db.commit()
     await db.refresh(tag)
     return _tag_to_output(tag)
+
+
+async def reorder_tags(
+    db: AsyncSession, *, command: ReorderTagsCommand
+) -> list[TagOutput]:
+    """Batch-update sort_order for all tags in a single UPDATE statement."""
+    if not command.items:
+        return await list_tags(db)
+
+    ids = [tag_id for tag_id, _ in command.items]
+
+    # Verify all ids exist
+    result = await db.execute(select(Tag.id).where(Tag.id.in_(ids)))
+    found_ids = set(result.scalars().all())
+    missing = set(ids) - found_ids
+    if missing:
+        raise TagNotFoundError(tag_id=next(iter(missing)))
+
+    sort_case = case(
+        dict(command.items),
+        value=Tag.id,
+    )
+    await db.execute(update(Tag).where(Tag.id.in_(ids)).values(sort_order=sort_case))
+    await db.commit()
+    return await list_tags(db)
 
 
 async def delete_tag(db: AsyncSession, tag_id: int) -> None:

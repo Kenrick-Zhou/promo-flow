@@ -101,15 +101,23 @@ export interface Tag {
   id: number
   name: string
   is_system: boolean
+  sort_order: number
   created_at: string
 }
 
 export interface TagCreate {
   name: string
   is_system?: boolean
+  sort_order?: number
 }
 
 export interface TagUpdate {
   name?: string
   is_system?: boolean
+  sort_order?: number
+}
+
+export interface TagReorderItem {
+  id: number
+  sort_order: number
 }

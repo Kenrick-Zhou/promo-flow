@@ -32,6 +32,7 @@ class CreateTagCommand:
 
     name: str
     is_system: bool = True
+    sort_order: int = 0
 
 
 @dataclass(slots=True)
@@ -40,6 +41,14 @@ class UpdateTagCommand:
 
     name: str | None = None
     is_system: bool | None = None
+    sort_order: int | None = None
+
+
+@dataclass(slots=True)
+class ReorderTagsCommand:
+    """Command for batch-reordering system tags."""
+
+    items: list[tuple[int, int]]  # list of (tag_id, sort_order)
 
 
 # ============================================================
@@ -79,4 +88,5 @@ class TagOutput:
     id: int
     name: str
     is_system: bool
+    sort_order: int
     created_at: str

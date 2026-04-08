@@ -7,6 +7,7 @@ from app.domains.system import (
     CategoryTreeOutput,
     CreateCategoryCommand,
     CreateTagCommand,
+    ReorderTagsCommand,
     TagOutput,
     UpdateCategoryCommand,
     UpdateTagCommand,
@@ -91,22 +92,40 @@ class CategoryTreeOut(BaseModel):
 class TagCreateIn(BaseModel):
     name: str = Field(..., min_length=1, max_length=64)
     is_system: bool = True
+    sort_order: int = 0
 
     def to_domain(self) -> CreateTagCommand:
         return CreateTagCommand(
             name=self.name,
             is_system=self.is_system,
+            sort_order=self.sort_order,
         )
 
 
 class TagUpdateIn(BaseModel):
     name: str | None = Field(None, min_length=1, max_length=64)
     is_system: bool | None = None
+    sort_order: int | None = None
 
     def to_domain(self) -> UpdateTagCommand:
         return UpdateTagCommand(
             name=self.name,
             is_system=self.is_system,
+            sort_order=self.sort_order,
+        )
+
+
+class TagReorderItem(BaseModel):
+    id: int
+    sort_order: int
+
+
+class TagReorderIn(BaseModel):
+    items: list[TagReorderItem] = Field(..., min_length=1)
+
+    def to_domain(self) -> ReorderTagsCommand:
+        return ReorderTagsCommand(
+            items=[(item.id, item.sort_order) for item in self.items],
         )
 
 
@@ -114,6 +133,7 @@ class TagOut(BaseModel):
     id: int
     name: str
     is_system: bool
+    sort_order: int
     created_at: str
 
     @classmethod
@@ -122,5 +142,6 @@ class TagOut(BaseModel):
             id=output.id,
             name=output.name,
             is_system=output.is_system,
+            sort_order=output.sort_order,
             created_at=output.created_at,
         )

@@ -58,9 +58,6 @@ export default function TagSelector({ availableTags, selectedTags, onChange }: P
                 }`}
               >
                 {tag.name}
-                {tag.is_system && !isSelected && (
-                  <span className="ml-0.5 text-[10px] opacity-60">默认</span>
-                )}
               </button>
             )
           })}

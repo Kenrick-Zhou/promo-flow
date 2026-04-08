@@ -9,6 +9,7 @@ from app.services.system.core import (
     get_tag,
     list_categories_tree,
     list_tags,
+    reorder_tags,
     update_category,
     update_tag,
 )
@@ -32,6 +33,7 @@ __all__ = [
     "get_tag",
     "list_categories_tree",
     "list_tags",
+    "reorder_tags",
     "update_category",
     "update_tag",
     "CategoryHasChildrenError",
