@@ -4,10 +4,16 @@ import pytest_asyncio
 from dotenv import dotenv_values
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 from sqlalchemy.pool import NullPool
 
 from app.db.base import Base  # noqa: F401 — imports all models so metadata is complete
+from app.db.session import get_session
 from app.main import app
 
 # ---------------------------------------------------------------------------
@@ -79,9 +85,16 @@ async def db(engine: AsyncEngine) -> AsyncSession:
 
 
 @pytest_asyncio.fixture
-async def client() -> AsyncClient:
-    """HTTP client wired to the FastAPI app. Each request uses its own DB session
-    via the normal get_db dependency chain — no session sharing across requests."""
+async def client(engine: AsyncEngine) -> AsyncClient:
+    """HTTP client wired to the FastAPI app. Overrides get_session so every
+    request goes to the *test* database instead of the development database."""
+    test_session_maker = async_sessionmaker(engine, expire_on_commit=False)
+
+    async def override_get_session():
+        async with test_session_maker() as session:
+            yield session
+
+    app.dependency_overrides[get_session] = override_get_session
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
     ) as ac:
