@@ -7,7 +7,6 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from app.core.deps import get_db
 from app.db.base import Base  # noqa: F401 — imports all models so metadata is complete
 from app.main import app
 
@@ -74,14 +73,15 @@ async def cleanup_test_data(engine: AsyncEngine, setup_schema) -> None:
 
 @pytest_asyncio.fixture
 async def db(engine: AsyncEngine) -> AsyncSession:
-    """Regular AsyncSession per test."""
+    """Regular AsyncSession per test (for direct DB assertions)."""
     async with AsyncSession(engine, expire_on_commit=False) as session:
         yield session
 
 
 @pytest_asyncio.fixture
-async def client(db: AsyncSession) -> AsyncClient:
-    app.dependency_overrides[get_db] = lambda: db
+async def client() -> AsyncClient:
+    """HTTP client wired to the FastAPI app. Each request uses its own DB session
+    via the normal get_db dependency chain — no session sharing across requests."""
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
     ) as ac:
