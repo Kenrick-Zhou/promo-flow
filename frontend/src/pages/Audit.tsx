@@ -1,30 +1,25 @@
 import { useEffect, useState } from 'react'
-import api from '@/services/api'
+import { useAudit } from '@/hooks/useAudit'
 import type { Content } from '@/types'
 
 export default function Audit() {
+  const { loading, listPending, submitAudit } = useAudit()
   const [items, setItems] = useState<Content[]>([])
   const [total, setTotal] = useState(0)
-  const [loading, setLoading] = useState(false)
-
-  async function fetchPending() {
-    setLoading(true)
-    try {
-      const { data } = await api.get('/audit/pending')
-      setItems(data.items)
-      setTotal(data.total)
-    } finally {
-      setLoading(false)
-    }
-  }
 
   useEffect(() => {
-    fetchPending()
-  }, [])
+    listPending().then((data) => {
+      setItems(data.items)
+      setTotal(data.total)
+    })
+  }, [listPending])
 
   async function handleAudit(id: number, status: 'approved' | 'rejected', comments?: string) {
-    await api.post(`/audit/${id}`, { status, comments })
-    fetchPending()
+    await submitAudit(id, { status, comments })
+    listPending().then((data) => {
+      setItems(data.items)
+      setTotal(data.total)
+    })
   }
 
   return (

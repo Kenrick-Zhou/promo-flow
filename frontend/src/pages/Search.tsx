@@ -1,36 +1,26 @@
 import { useState } from 'react'
-import api from '@/services/api'
 import ContentGrid from '@/components/content/ContentGrid'
-import type { Content, SearchResultItem } from '@/types'
+import { useSearch } from '@/hooks/useSearch'
+import type { SearchResultItem } from '@/types'
 
 export default function Search() {
+  const { loading, semanticSearch, ragQuery } = useSearch()
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<SearchResultItem[]>([])
   const [answer, setAnswer] = useState<string | null>(null)
-  const [loading, setLoading] = useState(false)
   const [mode, setMode] = useState<'search' | 'rag'>('search')
 
   async function handleSearch(e: React.FormEvent) {
     e.preventDefault()
     if (!query.trim()) return
-    setLoading(true)
     setAnswer(null)
-    try {
-      if (mode === 'rag') {
-        const { data } = await api.post('/search/rag', { query, limit: 5 })
-        setResults(
-          (data.sources as Partial<Content>[]).map((c) => ({
-            content: c as Content,
-            score: 1,
-          })),
-        )
-        setAnswer(data.answer)
-      } else {
-        const { data } = await api.post<SearchResultItem[]>('/search', { query, limit: 10 })
-        setResults(data)
-      }
-    } finally {
-      setLoading(false)
+    if (mode === 'rag') {
+      const result = await ragQuery(query)
+      setResults(result.sources)
+      setAnswer(result.answer)
+    } else {
+      const data = await semanticSearch(query)
+      setResults(data)
     }
   }
 
@@ -45,14 +35,23 @@ export default function Search() {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
-        <select
-          className="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-700 shadow-sm focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
-          value={mode}
-          onChange={(e) => setMode(e.target.value as 'search' | 'rag')}
-        >
-          <option value="search">语义检索</option>
-          <option value="rag">AI 问答</option>
-        </select>
+        {/* 搜索模式切换：分段控件，对齐 HyperUI Tabs 模式 */}
+        <div className="flex gap-1 rounded-lg bg-gray-100 p-1 dark:bg-gray-700">
+          {(['search', 'rag'] as const).map((m) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => setMode(m)}
+              className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${
+                mode === m
+                  ? 'bg-white text-purple-700 shadow-sm dark:bg-gray-800 dark:text-purple-300'
+                  : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200'
+              }`}
+            >
+              {m === 'search' ? '语义检索' : 'AI 问答'}
+            </button>
+          ))}
+        </div>
         <button
           type="submit"
           disabled={loading}

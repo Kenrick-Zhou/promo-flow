@@ -4,14 +4,14 @@ import { useContent } from '@/hooks/useContent'
 import type { Content, ContentStatus, ContentType } from '@/types'
 
 const statusOptions: { value: ContentStatus | ''; label: string }[] = [
-  { value: '', label: '全部状态' },
+  { value: '', label: '全部' },
   { value: 'approved', label: '已通过' },
   { value: 'pending', label: '待审核' },
   { value: 'rejected', label: '已拒绝' },
 ]
 
 const typeOptions: { value: ContentType | ''; label: string }[] = [
-  { value: '', label: '全部类型' },
+  { value: '', label: '全部' },
   { value: 'image', label: '图片' },
   { value: 'video', label: '视频' },
   { value: 'document', label: '文档' },
@@ -42,29 +42,41 @@ export default function Dashboard() {
         </span>
       </div>
 
-      <div className="flex gap-3 mb-6">
-        <select
-          className="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-700 shadow-sm focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
-          value={status}
-          onChange={(e) => setStatus(e.target.value as ContentStatus | '')}
-        >
+      <div className="flex flex-wrap gap-4 mb-6">
+        {/* 状态筛选 */}
+        <div className="flex gap-1 rounded-lg bg-gray-100 p-1 dark:bg-gray-700">
           {statusOptions.map((o) => (
-            <option key={o.value} value={o.value}>
+            <button
+              key={o.value}
+              type="button"
+              onClick={() => setStatus(o.value as ContentStatus | '')}
+              className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                status === o.value
+                  ? 'bg-white text-purple-700 shadow-sm dark:bg-gray-800 dark:text-purple-300'
+                  : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200'
+              }`}
+            >
               {o.label}
-            </option>
+            </button>
           ))}
-        </select>
-        <select
-          className="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-700 shadow-sm focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
-          value={contentType}
-          onChange={(e) => setContentType(e.target.value as ContentType | '')}
-        >
+        </div>
+        {/* 类型筛选 */}
+        <div className="flex gap-1 rounded-lg bg-gray-100 p-1 dark:bg-gray-700">
           {typeOptions.map((o) => (
-            <option key={o.value} value={o.value}>
+            <button
+              key={o.value}
+              type="button"
+              onClick={() => setContentType(o.value as ContentType | '')}
+              className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                contentType === o.value
+                  ? 'bg-white text-purple-700 shadow-sm dark:bg-gray-800 dark:text-purple-300'
+                  : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200'
+              }`}
+            >
               {o.label}
-            </option>
+            </button>
           ))}
-        </select>
+        </div>
       </div>
 
       {loading ? (
