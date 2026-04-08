@@ -5,7 +5,9 @@ from __future__ import annotations
 import uuid
 
 from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.base import BaseHTTPMiddleware
 
 
@@ -23,8 +25,28 @@ class RequestIdMiddleware(BaseHTTPMiddleware):
 def register_exception_handlers(app: FastAPI) -> None:
     """Register global exception handlers for unified error responses."""
 
-    @app.exception_handler(422)
-    async def validation_exception_handler(request: Request, exc):
+    @app.exception_handler(StarletteHTTPException)
+    async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+        request_id = getattr(request.state, "request_id", "unknown")
+        detail = exc.detail
+        if isinstance(detail, dict) and "error_code" in detail:
+            content = {**detail, "request_id": request_id}
+        else:
+            content = {
+                "error_code": "http_error",
+                "message": str(detail) if detail else exc.__class__.__name__,
+                "request_id": request_id,
+            }
+        return JSONResponse(
+            status_code=exc.status_code,
+            content=content,
+            headers={"X-Request-ID": request_id},
+        )
+
+    @app.exception_handler(RequestValidationError)
+    async def validation_exception_handler(
+        request: Request, exc: RequestValidationError
+    ):
         request_id = getattr(request.state, "request_id", "unknown")
         return JSONResponse(
             status_code=422,
