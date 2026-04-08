@@ -83,10 +83,10 @@ export default function Dashboard() {
 ```
 
 ### Page Conventions
-- **Data fetching** via custom hooks (`useContent`, etc.), triggered in `useEffect`.
+- **Data fetching** via custom hooks (`useContent`, `useAudit`, `useSearch`, etc.), triggered in `useEffect`.
 - **Filter state** managed with `useState` — passed as params to hook methods.
 - **Loading/empty/error states** handled directly in the page JSX.
-- **No direct `api` imports** — use hooks. Exception: pages may call `api` directly for simple one-off operations not worth abstracting (e.g., `Search.tsx` RAG query), but prefer hooks for reusable operations.
+- **No direct `api` imports in pages** — all API calls go through hooks, no exceptions. If no suitable hook exists, create one in `hooks/` first.
 - Pages are the **only place** that calls `useNavigate()` for programmatic navigation.
 
 ### Page Layout
