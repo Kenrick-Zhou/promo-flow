@@ -1,6 +1,8 @@
 import asyncio
 from logging.config import fileConfig
+from pathlib import Path
 
+from dotenv import dotenv_values
 from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
@@ -9,7 +11,18 @@ from alembic import context
 from app.core.config import settings
 
 config = context.config
-config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+
+# Support `alembic -x db=test upgrade head` to target the test database.
+# Example: cd backend && uv run alembic -x db=test upgrade head
+_cmd_kwargs = context.get_x_argument(as_dictionary=True)
+if _cmd_kwargs.get("db") == "test":
+    _ROOT = Path(__file__).resolve().parents[3]
+    _test_env = dotenv_values(_ROOT / ".env.test") or dotenv_values(_ROOT / ".env")
+    _db_url = _test_env.get("DATABASE_URL", settings.DATABASE_URL)
+else:
+    _db_url = settings.DATABASE_URL
+
+config.set_main_option("sqlalchemy.url", _db_url)
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)

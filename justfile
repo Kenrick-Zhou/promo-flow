@@ -38,6 +38,10 @@ be-dev:
 be-migrate:
     cd backend && uv run alembic upgrade head
 
+# 对测试数据库执行迁移（读取 .env.test）
+be-test-migrate:
+    cd backend && uv run alembic -x db=test upgrade head
+
 # 回滚所有迁移
 be-migrate-down:
     cd backend && uv run alembic downgrade base
@@ -115,6 +119,11 @@ lint: be-lint fe-lint fe-typecheck
 
 # 运行所有测试
 test: be-test
+
+# 完整检查：pre-commit + 后端测试
+check:
+    pre-commit run --all-files
+    cd backend && uv run pytest -n 8
 
 # ============================================================
 # 首次初始化（clone 后一键配置）
