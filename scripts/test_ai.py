@@ -33,7 +33,7 @@ import dashscope  # noqa: E402
 from dashscope import MultiModalConversation  # noqa: E402
 
 DASHSCOPE_API_KEY = os.environ["DASHSCOPE_API_KEY"]
-QIANWEN_MODEL = os.environ.get("DASHSCOPE_VISION_MODEL", "qwen3-vl-plus")
+QIANWEN_MODEL = os.environ.get("QIANWEN_MODEL", "qwen3-vl-plus")
 
 dashscope.api_key = DASHSCOPE_API_KEY
 
