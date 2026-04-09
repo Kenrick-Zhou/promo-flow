@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { X } from 'lucide-react'
 import type { Tag } from '@/types'
 
@@ -16,6 +16,18 @@ export default function TagSelector({
   disabled = false,
 }: Props) {
   const [inputValue, setInputValue] = useState('')
+  const [showMoreTags, setShowMoreTags] = useState(false)
+
+  const systemTags = useMemo(() => availableTags.filter((tag) => tag.is_system), [availableTags])
+  const moreTags = useMemo(() => availableTags.filter((tag) => !tag.is_system), [availableTags])
+  const selectedMoreTags = useMemo(
+    () => moreTags.filter((tag) => selectedTags.includes(tag.name)),
+    [moreTags, selectedTags],
+  )
+  const hiddenMoreTags = useMemo(
+    () => moreTags.filter((tag) => !selectedTags.includes(tag.name)),
+    [moreTags, selectedTags],
+  )
 
   function handleToggleTag(tagName: string) {
     if (disabled) {
@@ -55,31 +67,68 @@ export default function TagSelector({
   // Custom tags that aren't in the available tag list
   const customSelected = selectedTags.filter((t) => !availableTags.some((at) => at.name === t))
 
+  const visibleTags = showMoreTags
+    ? [...systemTags, ...moreTags]
+    : [...systemTags, ...selectedMoreTags]
+
+  function renderTagButton(tag: Tag) {
+    const isSelected = selectedTags.includes(tag.name)
+
+    return (
+      <button
+        key={tag.id}
+        type="button"
+        disabled={disabled}
+        onClick={() => handleToggleTag(tag.name)}
+        className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+          isSelected
+            ? 'bg-purple-600 text-white'
+            : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
+        }`}
+      >
+        {tag.name}
+      </button>
+    )
+  }
+
+  function renderToggleButton() {
+    if (showMoreTags) {
+      return (
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => setShowMoreTags(false)}
+          className="inline-flex items-center gap-1 rounded-full border border-dashed border-purple-300 bg-purple-50 px-3 py-1 text-xs font-medium text-purple-700 transition-colors hover:bg-purple-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-purple-700 dark:bg-purple-900/20 dark:text-purple-300 dark:hover:bg-purple-900/30"
+        >
+          ▲更少标签▲
+        </button>
+      )
+    }
+
+    if (hiddenMoreTags.length > 0) {
+      return (
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => setShowMoreTags(true)}
+          className="inline-flex items-center gap-1 rounded-full border border-dashed border-purple-300 bg-purple-50 px-3 py-1 text-xs font-medium text-purple-700 transition-colors hover:bg-purple-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-purple-700 dark:bg-purple-900/20 dark:text-purple-300 dark:hover:bg-purple-900/30"
+        >
+          ▼更多标签▼
+        </button>
+      )
+    }
+
+    return null
+  }
+
   return (
     <div className="space-y-3">
       <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">标签</label>
 
-      {/* Default tag chips */}
-      {availableTags.length > 0 && (
+      {(visibleTags.length > 0 || moreTags.length > 0) && (
         <div className="flex flex-wrap gap-2">
-          {availableTags.map((tag) => {
-            const isSelected = selectedTags.includes(tag.name)
-            return (
-              <button
-                key={tag.id}
-                type="button"
-                disabled={disabled}
-                onClick={() => handleToggleTag(tag.name)}
-                className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-                  isSelected
-                    ? 'bg-purple-600 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
-                }`}
-              >
-                {tag.name}
-              </button>
-            )
-          })}
+          {visibleTags.map(renderTagButton)}
+          {renderToggleButton()}
         </div>
       )}
 
@@ -113,8 +162,9 @@ export default function TagSelector({
         value={inputValue}
         onChange={(e) => setInputValue(e.target.value)}
         onKeyDown={handleKeyDown}
-        placeholder="输入标签名按回车添加自定义标签"
+        placeholder="输入自定义标签"
       />
+      <p className="text-xs text-gray-400 dark:text-gray-500">回车新增标签</p>
     </div>
   )
 }
