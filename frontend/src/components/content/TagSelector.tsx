@@ -6,12 +6,22 @@ interface Props {
   availableTags: Tag[]
   selectedTags: string[]
   onChange: (tags: string[]) => void
+  disabled?: boolean
 }
 
-export default function TagSelector({ availableTags, selectedTags, onChange }: Props) {
+export default function TagSelector({
+  availableTags,
+  selectedTags,
+  onChange,
+  disabled = false,
+}: Props) {
   const [inputValue, setInputValue] = useState('')
 
   function handleToggleTag(tagName: string) {
+    if (disabled) {
+      return
+    }
+
     if (selectedTags.includes(tagName)) {
       onChange(selectedTags.filter((t) => t !== tagName))
     } else {
@@ -20,10 +30,18 @@ export default function TagSelector({ availableTags, selectedTags, onChange }: P
   }
 
   function handleRemoveTag(tagName: string) {
+    if (disabled) {
+      return
+    }
+
     onChange(selectedTags.filter((t) => t !== tagName))
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (disabled) {
+      return
+    }
+
     if (e.key === 'Enter') {
       e.preventDefault()
       const name = inputValue.trim()
@@ -50,6 +68,7 @@ export default function TagSelector({ availableTags, selectedTags, onChange }: P
               <button
                 key={tag.id}
                 type="button"
+                disabled={disabled}
                 onClick={() => handleToggleTag(tag.name)}
                 className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium transition-colors ${
                   isSelected
@@ -75,8 +94,9 @@ export default function TagSelector({ availableTags, selectedTags, onChange }: P
               {name}
               <button
                 type="button"
+                disabled={disabled}
                 onClick={() => handleRemoveTag(name)}
-                className="ml-0.5 rounded-full p-0.5 hover:bg-purple-200 dark:hover:bg-purple-800"
+                className="ml-0.5 rounded-full p-0.5 hover:bg-purple-200 disabled:cursor-not-allowed disabled:opacity-60 dark:hover:bg-purple-800"
               >
                 <X className="size-3" />
               </button>
@@ -88,7 +108,8 @@ export default function TagSelector({ availableTags, selectedTags, onChange }: P
       {/* Input for custom tags */}
       <input
         type="text"
-        className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-700 shadow-sm focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+        disabled={disabled}
+        className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-700 shadow-sm focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:disabled:bg-gray-900 dark:disabled:text-gray-500"
         value={inputValue}
         onChange={(e) => setInputValue(e.target.value)}
         onKeyDown={handleKeyDown}

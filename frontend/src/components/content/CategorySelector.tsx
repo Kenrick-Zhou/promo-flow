@@ -8,6 +8,7 @@ interface Props {
   secondaryId: number | null
   onPrimaryChange: (id: number | null) => void
   onSecondaryChange: (id: number | null) => void
+  disabled?: boolean
 }
 
 interface DropdownProps {
@@ -138,6 +139,7 @@ export default function CategorySelector({
   secondaryId,
   onPrimaryChange,
   onSecondaryChange,
+  disabled = false,
 }: Props) {
   const selectedPrimary = categories.find((c) => c.id === primaryId)
   const secondaryOptions = selectedPrimary?.children ?? []
@@ -156,6 +158,7 @@ export default function CategorySelector({
         options={categories}
         value={primaryId}
         onChange={handlePrimaryChange}
+        disabled={disabled}
         required
       />
       <CategoryDropdown
@@ -165,7 +168,7 @@ export default function CategorySelector({
         options={secondaryOptions}
         value={secondaryId}
         onChange={onSecondaryChange}
-        disabled={!primaryId}
+        disabled={disabled || !primaryId}
         required
       />
     </div>

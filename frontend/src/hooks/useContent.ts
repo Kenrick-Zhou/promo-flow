@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react'
+import axios, { type AxiosProgressEvent } from 'axios'
 import api from '@/services/api'
 import type { Content, ContentCreate, ContentListOut } from '@/types'
 
@@ -47,5 +48,27 @@ export function useContent() {
     [],
   )
 
-  return { loading, error, listContents, getPresignedUrl, createContent }
+  const uploadToPresignedUrl = useCallback(
+    async (
+      uploadUrl: string,
+      file: File,
+      headers: Record<string, string>,
+      onProgress?: (progress: number) => void,
+    ): Promise<void> => {
+      await axios.put(uploadUrl, file, {
+        headers,
+        onUploadProgress: (event: AxiosProgressEvent) => {
+          if (!event.total || !onProgress) {
+            return
+          }
+
+          const progress = Math.min(100, Math.round((event.loaded / event.total) * 100))
+          onProgress(progress)
+        },
+      })
+    },
+    [],
+  )
+
+  return { loading, error, listContents, getPresignedUrl, createContent, uploadToPresignedUrl }
 }
