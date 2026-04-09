@@ -1,5 +1,5 @@
 ---
-applyTo: "backend/app/models/*.py, backend/migrations/**"
+applyTo: "backend/app/models/*.py, backend/alembic/**"
 ---
 ## Role
 - `models/` define ORM tables/relations/indexes only; no business logic or I/O.

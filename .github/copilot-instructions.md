@@ -38,7 +38,7 @@ promo-flow/
 │   │   │   ├── search/
 │   │   │   └── infrastructure/  # AI、OSS 适配器
 │   │   └── workers/      # 后台任务
-│   ├── migrations/       # Alembic 迁移
+│   ├── alembic/          # Alembic 迁移
 │   └── tests/
 ├── frontend/         # React 前端
 │   └── src/

@@ -120,7 +120,6 @@ async def update_user_role(...):
 - Access `current_user.id`, `current_user.role`, etc. directly.
 - Use `require_role(UserRole.admin)` or `require_role(UserRole.reviewer, UserRole.admin)` in `dependencies` for restricted endpoints.
 - No rate limiting infrastructure exists; do not add rate limiting dependencies.
-- For public endpoints, use `limit_by_tier("default_public", scope="ip")`.
 - Import schemas from the appropriate module:
   - Auth router: import from `app.schemas.user`
   - Content router: import from `app.schemas.content`
