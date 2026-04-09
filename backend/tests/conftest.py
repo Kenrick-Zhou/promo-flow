@@ -60,6 +60,17 @@ async def cleanup_test_data(engine: AsyncEngine, setup_schema) -> None:
     async with AsyncSession(engine) as session:
         await session.execute(
             text(
+                "DELETE FROM audit_logs WHERE content_id IN "
+                "(SELECT id FROM contents WHERE file_key LIKE :prefix)"
+            ),
+            {"prefix": f"{TEST_PREFIX}%"},
+        )
+        await session.execute(
+            text("DELETE FROM contents WHERE file_key LIKE :prefix"),
+            {"prefix": f"{TEST_PREFIX}%"},
+        )
+        await session.execute(
+            text(
                 "DELETE FROM content_tags WHERE tag_id IN "
                 "(SELECT id FROM tags WHERE name LIKE :prefix)"
             ),

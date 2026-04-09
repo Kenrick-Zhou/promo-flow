@@ -16,7 +16,7 @@ config = context.config
 # Example: cd backend && uv run alembic -x db=test upgrade head
 _cmd_kwargs = context.get_x_argument(as_dictionary=True)
 if _cmd_kwargs.get("db") == "test":
-    _ROOT = Path(__file__).resolve().parents[3]
+    _ROOT = Path(__file__).resolve().parents[2]
     _test_env = dotenv_values(_ROOT / ".env.test") or dotenv_values(_ROOT / ".env")
     _db_url = _test_env.get("DATABASE_URL", settings.DATABASE_URL)
 else:

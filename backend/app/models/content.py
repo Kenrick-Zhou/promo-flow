@@ -23,7 +23,7 @@ class Content(Base):
     __tablename__ = "contents"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    title: Mapped[str] = mapped_column(String(256), nullable=False)
+    title: Mapped[str | None] = mapped_column(String(256), nullable=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     content_type: Mapped[ContentType] = mapped_column(
         Enum(ContentType, native_enum=False), nullable=False

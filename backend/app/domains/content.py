@@ -50,7 +50,7 @@ class AuditDecision(str, enum.Enum):
 class CreateContentCommand:
     """Command for creating new content."""
 
-    title: str
+    title: str | None
     description: str | None
     tag_names: list[str]
     content_type: ContentType
@@ -98,7 +98,7 @@ class ContentOutput:
     """Content data returned by service layer."""
 
     id: int
-    title: str
+    title: str | None
     description: str | None
     tags: list[str]
     content_type: ContentType

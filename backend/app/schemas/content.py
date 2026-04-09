@@ -13,7 +13,7 @@ from app.domains.content import (
 
 
 class ContentCreateIn(BaseModel):
-    title: str = Field(..., max_length=256)
+    title: str | None = Field(None, max_length=256)
     description: str | None = None
     tag_names: list[str] = []
     content_type: ContentType
@@ -51,7 +51,7 @@ class ContentUpdateIn(BaseModel):
 
 class ContentOut(BaseModel):
     id: int
-    title: str
+    title: str | None
     description: str | None
     tags: list[str]
     content_type: ContentType

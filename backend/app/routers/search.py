@@ -17,6 +17,10 @@ from app.services.search import semantic_search
 router = APIRouter(prefix="/search", tags=["search"])
 
 
+def _build_context_title(title: str | None) -> str:
+    return title or "未命名素材"
+
+
 @router.post("", response_model=list[SearchResultOut])
 async def semantic_search_route(
     body: SearchQueryIn,
@@ -41,7 +45,10 @@ async def rag_search_route(
     embedding = await generate_embedding(command.query)
     results = await semantic_search(db, query_embedding=embedding, command=command)
     context_docs = [
-        f"{r.content.title}: {r.content.ai_summary or r.content.description or ''}"
+        (
+            f"{_build_context_title(r.content.title)}: "
+            f"{r.content.ai_summary or r.content.description or ''}"
+        )
         for r in results
     ]
     answer = await generate_rag_response(command.query, context_docs)

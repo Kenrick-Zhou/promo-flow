@@ -10,6 +10,10 @@ const VIDEO_EXTENSIONS = ['mp4', 'avi', 'mov', 'wmv', 'flv', 'mkv', 'webm', 'm4v
 
 const typeLabel: Record<string, string> = { image: '图片', video: '视频' }
 
+interface Props {
+  onSuccess?: () => void
+}
+
 function detectContentType(filename: string): ContentType | null {
   const ext = filename.split('.').pop()?.toLowerCase()
   if (!ext) return null
@@ -18,13 +22,12 @@ function detectContentType(filename: string): ContentType | null {
   return null
 }
 
-export default function UploadForm({ onSuccess }: { onSuccess?: () => void }) {
+export default function UploadForm({ onSuccess }: Props) {
   const { getPresignedUrl, createContent, loading } = useContent()
   const { listCategories, listTags } = useSystem()
 
   const [file, setFile] = useState<File | null>(null)
   const [contentType, setContentType] = useState<ContentType | null>(null)
-  const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [primaryCategoryId, setPrimaryCategoryId] = useState<number | null>(null)
@@ -68,7 +71,6 @@ export default function UploadForm({ onSuccess }: { onSuccess?: () => void }) {
       const { upload_url, file_key } = await getPresignedUrl(file.name)
       await fetch(upload_url, { method: 'PUT', body: file })
       await createContent({
-        title,
         description: description || undefined,
         tag_names: selectedTags,
         content_type: contentType,
@@ -113,23 +115,11 @@ export default function UploadForm({ onSuccess }: { onSuccess?: () => void }) {
         onSecondaryChange={setSecondaryCategoryId}
       />
 
-      <div>
-        <label
-          htmlFor="title"
-          className="block text-sm font-medium text-gray-700 dark:text-gray-200"
-        >
-          标题
-        </label>
-        <input
-          id="title"
-          type="text"
-          className="mt-1.5 w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-700 shadow-sm focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          required
-          maxLength={256}
-        />
-      </div>
+      <TagSelector
+        availableTags={availableTags}
+        selectedTags={selectedTags}
+        onChange={setSelectedTags}
+      />
 
       <div>
         <label
@@ -146,12 +136,6 @@ export default function UploadForm({ onSuccess }: { onSuccess?: () => void }) {
           onChange={(e) => setDescription(e.target.value)}
         />
       </div>
-
-      <TagSelector
-        availableTags={availableTags}
-        selectedTags={selectedTags}
-        onChange={setSelectedTags}
-      />
 
       {error && (
         <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400">

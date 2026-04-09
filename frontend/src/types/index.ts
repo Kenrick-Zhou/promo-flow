@@ -18,7 +18,7 @@ export type ContentType = 'image' | 'video' | 'document'
 
 export interface Content {
   id: number
-  title: string
+  title: string | null
   description: string | null
   tags: string[]
   content_type: ContentType
@@ -37,7 +37,6 @@ export interface Content {
 }
 
 export interface ContentCreate {
-  title: string
   description?: string
   tag_names: string[]
   content_type: ContentType

@@ -13,17 +13,19 @@ const statusLabel: Record<string, { text: string; className: string }> = {
 
 export default function ContentCard({ content, onClick }: Props) {
   const badge = statusLabel[content.status]
+  const title = content.title ?? 'AI 标题生成中'
+
   return (
     <article
-      className="group overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm transition hover:shadow-lg dark:border-gray-700 dark:bg-gray-800 cursor-pointer"
+      className="group cursor-pointer overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm transition hover:shadow-lg dark:border-gray-700 dark:bg-gray-800"
       onClick={onClick}
     >
       {/* Thumbnail */}
-      <div className="w-full h-40 bg-gray-100 dark:bg-gray-700 flex items-center justify-center overflow-hidden">
+      <div className="flex h-40 w-full items-center justify-center overflow-hidden bg-gray-100 dark:bg-gray-700">
         {content.content_type === 'image' && content.file_url ? (
           <img
             src={content.file_url}
-            alt={content.title}
+            alt={title}
             className="h-full w-full object-cover transition-transform group-hover:scale-105"
           />
         ) : (
@@ -32,19 +34,17 @@ export default function ContentCard({ content, onClick }: Props) {
       </div>
 
       <div className="p-4">
-        <div className="flex items-center justify-between gap-2 mb-1">
-          <h3 className="text-sm font-semibold text-gray-900 truncate dark:text-white">
-            {content.title}
-          </h3>
+        <div className="mb-1 flex items-center justify-between gap-2">
+          <h3 className="truncate text-sm font-semibold text-gray-900 dark:text-white">{title}</h3>
           <span
-            className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium shrink-0 ${badge.className}`}
+            className={`inline-flex shrink-0 items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${badge.className}`}
           >
             {badge.text}
           </span>
         </div>
 
         {content.ai_summary && (
-          <p className="text-xs text-gray-500 line-clamp-2 mb-2 dark:text-gray-400">
+          <p className="mb-2 line-clamp-2 text-xs text-gray-500 dark:text-gray-400">
             {content.ai_summary}
           </p>
         )}

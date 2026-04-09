@@ -29,6 +29,10 @@ async def notify_content_approved(content_id: int) -> None:
     pass
 
 
+def _build_context_title(title: str | None) -> str:
+    return title or "未命名素材"
+
+
 async def handle_message_event(event: dict) -> None:
     """Handle @bot message events and respond with RAG search results."""
     message = event.get("message", {})
@@ -66,7 +70,10 @@ async def handle_message_event(event: dict) -> None:
         return
 
     context_docs = [
-        f"{r.content.title}: {r.content.ai_summary or r.content.description or ''}"
+        (
+            f"{_build_context_title(r.content.title)}: "
+            f"{r.content.ai_summary or r.content.description or ''}"
+        )
         for r in results
     ]
     answer = await generate_rag_response(text, context_docs)

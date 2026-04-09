@@ -41,7 +41,9 @@ export default function Audit() {
           >
             <div className="flex items-start justify-between gap-4">
               <div className="flex-1 min-w-0">
-                <h3 className="font-semibold text-gray-900 dark:text-white">{item.title}</h3>
+                <h3 className="font-semibold text-gray-900 dark:text-white">
+                  {item.title ?? 'AI 标题生成中'}
+                </h3>
                 <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{item.description}</p>
                 <div className="mt-2 flex flex-wrap gap-1">
                   {item.tags.map((t) => (
