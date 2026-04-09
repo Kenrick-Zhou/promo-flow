@@ -2,13 +2,18 @@
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, TypedDict
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_user, get_db
-from app.domains.content import ContentStatus, ContentType, PresignedUrlOutput
+from app.domains.content import (
+    ContentOutput,
+    ContentStatus,
+    ContentType,
+    PresignedUrlOutput,
+)
 from app.models.user import User
 from app.schemas.content import (
     ContentCreateIn,
@@ -36,6 +41,23 @@ from app.services.infrastructure.storage import (
 )
 
 router = APIRouter(prefix="/contents", tags=["content"])
+
+
+class _AiContext(TypedDict):
+    primary_category_name: str | None
+    category_name: str | None
+    tags: list[str]
+    description: str | None
+
+
+def _build_ai_context(content: ContentOutput) -> _AiContext:
+    """Build structured context passed into AI analysis/title generation."""
+    return {
+        "primary_category_name": content.primary_category_name,
+        "category_name": content.category_name,
+        "tags": content.tags,
+        "description": content.description,
+    }
 
 
 @router.get("/presigned-upload", response_model=PresignedUrlOut)
@@ -164,23 +186,36 @@ async def _run_ai_analysis(content_id: int, file_key: str, content_type: str) ->
 
     from app.db.session import AsyncSessionLocal
     from app.services.content import (
+        get_content,
         mark_content_ai_failed,
         mark_content_ai_processing,
         update_content_ai_fields,
     )
-    from app.services.infrastructure.ai import analyze_content, generate_embedding
+    from app.services.infrastructure.ai import (
+        analyze_content,
+        generate_content_title,
+        generate_embedding,
+    )
 
     logger = logging.getLogger(__name__)
 
     async with AsyncSessionLocal() as db:
         await mark_content_ai_processing(db, content_id)
+        content = await get_content(db, content_id)
+
+    ai_context = _build_ai_context(content)
 
     try:
         file_url = get_public_url(file_key)
-        result = await analyze_content(file_url, content_type)
-        title = result.get("title", "")
+        result = await analyze_content(file_url, content_type, **ai_context)
         summary = result.get("summary", "")
         keywords = result.get("keywords", [])
+        title = await generate_content_title(
+            content_type,
+            **ai_context,
+            summary=summary,
+            keywords=keywords,
+        )
         parts = [p for p in [title, summary, " ".join(keywords)] if p]
         embedding_text = " ".join(parts)
         embedding = await generate_embedding(embedding_text)

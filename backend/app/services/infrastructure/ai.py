@@ -35,16 +35,29 @@ _CONTENT_TYPE_LABELS = {
 }
 
 
-class _AnalysisResponse(BaseModel):
-    """LLM response schema for content analysis. Internal use only."""
+class _StructuredContext(TypedDict):
+    """Structured business context supplied to the AI prompts."""
 
-    title: str = ""
+    primary_category_name: str | None
+    category_name: str | None
+    tags: list[str]
+    description: str | None
+
+
+class _SummaryKeywordsResponse(BaseModel):
+    """LLM response schema for summary/keywords analysis. Internal use only."""
+
     summary: str = ""
     keywords: list[str] = Field(default_factory=list)
 
 
+class _TitleResponse(BaseModel):
+    """LLM response schema for generated title. Internal use only."""
+
+    title: str = ""
+
+
 class _AnalysisResult(TypedDict):
-    title: str
     summary: str
     keywords: list[str]
 
@@ -74,15 +87,63 @@ def _build_media_part(file_url: str, content_type: str) -> dict[str, str]:
 def _parse_analysis_text(text: str) -> _AnalysisResult:
     """Parse multimodal analysis response text into a validated result."""
     try:
-        parsed = _AnalysisResponse.model_validate_json(text)
+        parsed = _SummaryKeywordsResponse.model_validate_json(text)
     except Exception:
         json_str = _extract_json(text)
-        parsed = _AnalysisResponse.model_validate(json.loads(json_str))
+        parsed = _SummaryKeywordsResponse.model_validate(json.loads(json_str))
     return cast(_AnalysisResult, parsed.model_dump())
 
 
+def _parse_title_text(text: str) -> str:
+    """Parse title generation response text into a validated title."""
+    try:
+        parsed = _TitleResponse.model_validate_json(text)
+    except Exception:
+        json_str = _extract_json(text)
+        parsed = _TitleResponse.model_validate(json.loads(json_str))
+    return parsed.title.strip()
+
+
 def _empty_analysis_result() -> _AnalysisResult:
-    return {"title": "", "summary": "", "keywords": []}
+    return {"summary": "", "keywords": []}
+
+
+def _normalize_context(
+    *,
+    primary_category_name: str | None,
+    category_name: str | None,
+    tags: list[str] | None,
+    description: str | None,
+) -> _StructuredContext:
+    return {
+        "primary_category_name": primary_category_name,
+        "category_name": category_name,
+        "tags": [tag.strip() for tag in (tags or []) if tag.strip()],
+        "description": description.strip() if description else None,
+    }
+
+
+def _build_prompt_kwargs(
+    *,
+    content_type: str,
+    primary_category_name: str | None,
+    category_name: str | None,
+    tags: list[str] | None,
+    description: str | None,
+) -> dict[str, object]:
+    normalized = _normalize_context(
+        primary_category_name=primary_category_name,
+        category_name=category_name,
+        tags=tags,
+        description=description,
+    )
+    return {
+        "content_type_label": _CONTENT_TYPE_LABELS.get(content_type, "素材"),
+        "primary_category_name": normalized["primary_category_name"] or "未提供",
+        "category_name": normalized["category_name"] or "未提供",
+        "tags": normalized["tags"],
+        "description": normalized["description"] or "未提供",
+    }
 
 
 def _extract_response_text(response: Any) -> str:
@@ -95,10 +156,26 @@ def _extract_response_text(response: Any) -> str:
     return ""
 
 
-def _call_multimodal(file_url: str, content_type: str) -> _AnalysisResult:
+def _call_multimodal(
+    file_url: str,
+    content_type: str,
+    *,
+    primary_category_name: str | None,
+    category_name: str | None,
+    tags: list[str] | None,
+    description: str | None,
+) -> _AnalysisResult:
     """Sync call to Qianwen multimodal model."""
-    content_type_label = _CONTENT_TYPE_LABELS.get(content_type, "素材")
-    prompt_text = render("content_analysis.j2", content_type_label=content_type_label)
+    prompt_text = render(
+        "content_analysis.j2",
+        **_build_prompt_kwargs(
+            content_type=content_type,
+            primary_category_name=primary_category_name,
+            category_name=category_name,
+            tags=tags,
+            description=description,
+        ),
+    )
 
     messages = [
         {
@@ -125,12 +202,63 @@ def _call_multimodal(file_url: str, content_type: str) -> _AnalysisResult:
         return _empty_analysis_result()
 
 
-async def analyze_content(file_url: str, content_type: str) -> _AnalysisResult:
+async def analyze_content(
+    file_url: str,
+    content_type: str,
+    *,
+    primary_category_name: str | None = None,
+    category_name: str | None = None,
+    tags: list[str] | None = None,
+    description: str | None = None,
+) -> _AnalysisResult:
     """
-    Send media to Qianwen multimodal model for analysis (sync SDK wrapped).
-    Uses JSON Mode to force structured output for content analysis.
+    Send media to Qianwen multimodal model for summary/keywords analysis.
+    Uses JSON Mode to force structured output and includes upload metadata as context.
     """
-    return await run_in_threadpool(_call_multimodal, file_url, content_type)
+    return await run_in_threadpool(
+        _call_multimodal,
+        file_url,
+        content_type,
+        primary_category_name=primary_category_name,
+        category_name=category_name,
+        tags=tags,
+        description=description,
+    )
+
+
+async def generate_content_title(
+    content_type: str,
+    *,
+    primary_category_name: str | None = None,
+    category_name: str | None = None,
+    tags: list[str] | None = None,
+    description: str | None = None,
+    summary: str,
+    keywords: list[str],
+) -> str:
+    """Generate a content title after summary/keywords are produced."""
+    prompt_text = render(
+        "content_title.j2",
+        **_build_prompt_kwargs(
+            content_type=content_type,
+            primary_category_name=primary_category_name,
+            category_name=category_name,
+            tags=tags,
+            description=description,
+        ),
+        summary=summary or "未生成",
+        keywords=keywords,
+    )
+    try:
+        response = await _dashscope_compat.chat.completions.create(
+            model=settings.DASHSCOPE_RAG_MODEL,
+            messages=[{"role": "user", "content": prompt_text}],  # type: ignore[list-item]
+            response_format=cast(Any, _JSON_MODE_RESPONSE_FORMAT),
+            max_tokens=128,
+        )
+        return _parse_title_text(response.choices[0].message.content or "")
+    except Exception:
+        return ""
 
 
 async def generate_embedding(text: str) -> list[float]:

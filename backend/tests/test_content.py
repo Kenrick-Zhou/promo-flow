@@ -1,18 +1,21 @@
 import uuid
+from collections.abc import AsyncGenerator
 
 import pytest
 import pytest_asyncio
 from httpx import AsyncClient
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 import app.routers.content as content_router
+import app.services.infrastructure.ai as ai_service
 from app.core.deps import get_current_user
-from app.domains.content import UserRole
+from app.domains.content import ContentType, CreateContentCommand, UserRole
 from app.main import app
 from app.models.category import Category
 from app.models.content import Content
 from app.models.user import User
+from app.services.content import create_content
 from tests.conftest import TEST_PREFIX
 
 _RUN = uuid.uuid4().hex[:8]
@@ -36,7 +39,10 @@ async def employee_user(db: AsyncSession) -> User:
 
 
 @pytest_asyncio.fixture
-async def employee_client(client: AsyncClient, employee_user: User) -> AsyncClient:
+async def employee_client(
+    client: AsyncClient,
+    employee_user: User,
+) -> AsyncGenerator[AsyncClient, None]:
     app.dependency_overrides[get_current_user] = lambda: employee_user
     yield client
     app.dependency_overrides.pop(get_current_user, None)
@@ -180,3 +186,112 @@ async def test_create_content_with_primary_category_rejected(
     assert "二级类目" in data["message"]
     assert data["request_id"]
     assert resp.headers["X-Request-ID"] == data["request_id"]
+
+
+@pytest.mark.asyncio
+async def test_run_ai_analysis_uses_context_and_generates_title_after_analysis(
+    db: AsyncSession,
+    engine: AsyncEngine,
+    employee_user: User,
+    secondary_category: Category,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    output = await create_content(
+        db,
+        command=CreateContentCommand(
+            title=None,
+            description="适合女性营养场景的宣传图",
+            tag_names=[_n("胶原蛋白"), _n("焕亮")],
+            content_type=ContentType.image,
+            file_key=_n("analysis-sequence.png"),
+            uploaded_by=employee_user.id,
+            category_id=secondary_category.id,
+        ),
+    )
+    assert secondary_category.parent is not None
+    primary_category_name = secondary_category.parent.name
+    events: list[str] = []
+    captured_analysis: dict[str, object] = {}
+    captured_title: dict[str, object] = {}
+
+    async def fake_analyze_content(
+        file_url: str,
+        content_type: str,
+        **kwargs: object,
+    ) -> dict[str, object]:
+        events.append("analyze")
+        captured_analysis.update(
+            {
+                "file_url": file_url,
+                "content_type": content_type,
+                **kwargs,
+            }
+        )
+        return {
+            "summary": "强调胶原蛋白产品卖点与目标人群。",
+            "keywords": ["胶原蛋白", "焕亮", "女性营养"],
+        }
+
+    async def fake_generate_content_title(
+        content_type: str,
+        **kwargs: object,
+    ) -> str:
+        events.append("title")
+        captured_title.update({"content_type": content_type, **kwargs})
+        return "胶原蛋白焕亮海报"
+
+    async def fake_generate_embedding(text: str) -> list[float]:
+        events.append("embedding")
+        expected_text = (
+            "胶原蛋白焕亮海报 "
+            "强调胶原蛋白产品卖点与目标人群。 "
+            "胶原蛋白 焕亮 女性营养"
+        )
+        assert text == expected_text
+        return [0.0] * 1024
+
+    test_session_maker = async_sessionmaker(engine, expire_on_commit=False)
+
+    monkeypatch.setattr(
+        content_router,
+        "get_public_url",
+        lambda file_key: f"https://example.com/{file_key}",
+    )
+    monkeypatch.setattr(ai_service, "analyze_content", fake_analyze_content)
+    monkeypatch.setattr(
+        ai_service, "generate_content_title", fake_generate_content_title
+    )
+    monkeypatch.setattr(ai_service, "generate_embedding", fake_generate_embedding)
+    monkeypatch.setattr("app.db.session.AsyncSessionLocal", test_session_maker)
+
+    await content_router._run_ai_analysis(
+        output.id,
+        output.file_key,
+        output.content_type.value,
+    )
+
+    assert events == ["analyze", "title", "embedding"]
+    assert captured_analysis == {
+        "file_url": f"https://example.com/{output.file_key}",
+        "content_type": "image",
+        "primary_category_name": primary_category_name,
+        "category_name": secondary_category.name,
+        "tags": [_n("胶原蛋白"), _n("焕亮")],
+        "description": "适合女性营养场景的宣传图",
+    }
+    assert captured_title == {
+        "content_type": "image",
+        "primary_category_name": primary_category_name,
+        "category_name": secondary_category.name,
+        "tags": [_n("胶原蛋白"), _n("焕亮")],
+        "description": "适合女性营养场景的宣传图",
+        "summary": "强调胶原蛋白产品卖点与目标人群。",
+        "keywords": ["胶原蛋白", "焕亮", "女性营养"],
+    }
+
+    result = await db.execute(select(Content).where(Content.id == output.id))
+    content = result.scalar_one()
+    assert content.title == "胶原蛋白焕亮海报"
+    assert content.ai_summary == "强调胶原蛋白产品卖点与目标人群。"
+    assert content.ai_keywords == ["胶原蛋白", "焕亮", "女性营养"]
+    assert content.ai_status.value == "completed"
