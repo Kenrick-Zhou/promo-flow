@@ -22,7 +22,7 @@ export default function Login() {
         .then(() => navigate('/'))
         .catch(() => {})
     }
-  }, [])
+  }, [loginWithCode, navigate, searchParams, token])
 
   function handleFeishuLogin() {
     fetch('/api/v1/auth/login')

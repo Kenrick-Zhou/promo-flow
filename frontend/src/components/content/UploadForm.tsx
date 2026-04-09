@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useContent } from '@/hooks/useContent'
 import { useSystem } from '@/hooks/useSystem'
 import CategorySelector from '@/components/content/CategorySelector'
+import LoadingDots from '@/components/ui/LoadingDots'
 import TagSelector from '@/components/content/TagSelector'
 import type { CategoryTree, ContentType, Tag } from '@/types'
 
@@ -33,18 +34,28 @@ export default function UploadForm({ onSuccess }: Props) {
   const [primaryCategoryId, setPrimaryCategoryId] = useState<number | null>(null)
   const [secondaryCategoryId, setSecondaryCategoryId] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [initialLoading, setInitialLoading] = useState(true)
 
   const [categories, setCategories] = useState<CategoryTree[]>([])
   const [availableTags, setAvailableTags] = useState<Tag[]>([])
 
   useEffect(() => {
-    listCategories()
-      .then(setCategories)
-      .catch(() => {})
-    listTags()
-      .then(setAvailableTags)
-      .catch(() => {})
+    Promise.all([listCategories(), listTags()])
+      .then(([loadedCategories, loadedTags]) => {
+        setCategories(loadedCategories)
+        setAvailableTags(loadedTags)
+      })
+      .catch(() => {
+        setError('基础数据加载失败，请刷新页面后重试')
+      })
+      .finally(() => {
+        setInitialLoading(false)
+      })
   }, [listCategories, listTags])
+
+  if (initialLoading) {
+    return <LoadingDots label="正在加载类目与系统默认标签…" className="max-w-lg" />
+  }
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const selected = e.target.files?.[0] ?? null

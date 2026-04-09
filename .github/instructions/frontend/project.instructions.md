@@ -81,4 +81,5 @@ Type-only imports use `import type { ... }`.
 4. Create page in `pages/` composing components + hooks
 5. Add route in `App.tsx` with appropriate auth guard
 6. Add sidebar nav item in `Sidebar.tsx` (conditionally by role if needed)
-7. Verify: `npm run build` passes with zero errors
+7. For every async backend request that affects visible UI, add a clear loading interaction (prefer the shared HyperUI-style dots loader for page/section loading)
+8. Verify: `npm run build` passes with zero errors

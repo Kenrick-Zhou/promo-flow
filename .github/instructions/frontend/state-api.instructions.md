@@ -112,6 +112,7 @@ export function useContent() {
 
 ### Hook Design Rules
 - **Return loading/error state** for data-fetching hooks.
+- When a hook powers UI that depends on backend results, the consuming page/component must surface that loading state with visible feedback instead of rendering an empty placeholder.
 - **Wrap methods in `useCallback`** to provide stable references for `useEffect` deps.
 - **Delegate to api service** — hooks never use `fetch()` or construct URLs manually.
   - Exception: `useAuth.loginWithCode()` uses `fetch()` for the OAuth callback (runs before axios interceptor is configured). Migrate to `api` when feasible.

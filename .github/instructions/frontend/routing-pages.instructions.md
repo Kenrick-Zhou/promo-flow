@@ -86,6 +86,8 @@ export default function Dashboard() {
 - **Data fetching** via custom hooks (`useContent`, `useAudit`, `useSearch`, etc.), triggered in `useEffect`.
 - **Filter state** managed with `useState` — passed as params to hook methods.
 - **Loading/empty/error states** handled directly in the page JSX.
+- Every page that waits for backend data before rendering the main content **must** provide an explicit loading interaction; never leave a blank area or rely only on late content pop-in.
+- Prefer the shared `components/ui/LoadingDots.tsx` pattern (HyperUI Dots Ping style) for initial page-level loading states so the experience stays consistent across routes.
 - **No direct `api` imports in pages** — all API calls go through hooks, no exceptions. If no suitable hook exists, create one in `hooks/` first.
 - Pages are the **only place** that calls `useNavigate()` for programmatic navigation.
 

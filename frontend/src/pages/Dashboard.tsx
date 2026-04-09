@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import ContentGrid from '@/components/content/ContentGrid'
+import LoadingDots from '@/components/ui/LoadingDots'
 import { useContent } from '@/hooks/useContent'
 import type { Content, ContentStatus, ContentType } from '@/types'
 
@@ -31,7 +32,7 @@ export default function Dashboard() {
         setTotal(r.total)
       },
     )
-  }, [status, contentType])
+  }, [contentType, listContents, status])
 
   return (
     <div>
@@ -79,11 +80,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {loading ? (
-        <div className="flex justify-center py-20 text-gray-400 dark:text-gray-500">加载中...</div>
-      ) : (
-        <ContentGrid items={items} />
-      )}
+      {loading ? <LoadingDots label="素材广场加载中…" /> : <ContentGrid items={items} />}
     </div>
   )
 }
