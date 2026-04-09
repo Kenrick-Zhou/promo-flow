@@ -32,6 +32,29 @@ engine = create_async_engine(db_url, poolclass=NullPool)
 
 - **Do NOT** use transaction-level rollback (savepoint) for test isolation with this stack. Starlette's `BaseHTTPMiddleware` spawns tasks inside an anyio task group; the shared connection held open for savepoints is inaccessible from those tasks, causing `MissingGreenlet` errors.
 
+### 测试库 Schema 同步（重要）
+
+测试数据库与开发数据库是**独立的两个数据库**。`conftest.py` 中的 `Base.metadata.create_all` 只能建立尚不存在的表，**不能**为已有的表补充新列。
+
+**每次 model 变更并生成 Alembic 迁移后，必须同时对测试库执行迁移：**
+
+```bash
+# 开发库（读取根目录 .env）
+cd backend && uv run alembic upgrade head
+
+# 测试库（读取根目录 .env.test）
+cd backend && uv run alembic -x db=test upgrade head
+```
+
+或用 just 快捷命令：
+
+```bash
+just be-migrate        # 对开发库迁移
+just be-test-migrate   # 对测试库迁移
+```
+
+如果跳过测试库迁移，运行 pytest 时会出现 `UndefinedColumnError: column xxx does not exist`。
+
 ## Test Data Isolation
 
 Use the **`TEST_PREFIX = "__pytest__"`** naming convention:

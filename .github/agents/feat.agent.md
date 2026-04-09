@@ -39,7 +39,7 @@ tools: [read, edit, search, execute, todo, agent]
 ```
 1. domains/    ← 纯类型（Enum、dataclass Command/Output）
 2. models/     ← ORM 表定义
-3. migrations/ ← alembic revision --autogenerate
+3. migrations/ ← alembic revision --autogenerate（生成后须人工审查，删除无关的 FK/index 噪声操作）
 4. services/   ← 业务逻辑（errors.py + core.py）
 5. schemas/    ← HTTP 契约（XxxIn / XxxOut + to_domain / from_domain）
 6. routers/    ← 路由（薄层，调用 service）
@@ -69,7 +69,10 @@ tools: [read, edit, search, execute, todo, agent]
 - **错误处理**：domain exceptions 在 `services/<domain>/errors.py` 定义；router 用 `raise_<domain>_error(exc)` 转换为 HTTP 错误，`detail` 格式 `{"error_code": ..., "message": ...}`。
 - **DB 操作**：使用 `AsyncSession`，SQLAlchemy 2.0 `select()` 风格。
 - **外部调用**：同步 SDK（OSS、DashScope）用 `run_in_threadpool()` 包装。
-- **Alembic 迁移**：每次 model 变更后运行 `cd backend && uv run alembic revision --autogenerate -m "..."` 并 `uv run alembic upgrade head`。
+- **Alembic 迁移**：每次 model 变更后运行 `cd backend && uv run alembic revision --autogenerate -m "..."` 并：
+  1. `uv run alembic upgrade head` — 应用到**开发数据库**
+  2. `uv run alembic -x db=test upgrade head` — 同步到**测试数据库**（读取根目录 `.env.test`）
+  > ⚠️ 如果跳过第 2 步，运行测试时会报 `UndefinedColumnError`。`conftest.py` 中的 `create_all` 只建新表，不补列。
 - **所有 Python 命令**：在 `backend/` 目录下通过 `uv run <cmd>` 执行，禁止直接调用 `python` / `pip` / `pytest`。
 
 ### 前端关键规范

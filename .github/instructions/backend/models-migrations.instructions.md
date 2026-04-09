@@ -18,7 +18,13 @@ applyTo: "backend/app/models/*.py, backend/migrations/**"
 
 ## Alembic Migrations
 - Any model change requires a migration: `alembic revision --autogenerate -m "..."`.
-- Before commit, run `alembic upgrade head` locally; production follows canary/rollbackable strategies.
+- **审查生成的迁移文件**：`--autogenerate` 有时会检测到与本次改动无关的 FK/index 命名漂移，生成多余的 `op.drop_index` / `op.create_foreign_key` 等操作。必须人工删除这些无关操作，只保留与本次 model 变更直接相关的 DDL。
+- 应用迁移时，开发库和测试库**都需要**执行：
+  ```bash
+  cd backend && uv run alembic upgrade head                # 开发库（读取 .env）
+  cd backend && uv run alembic -x db=test upgrade head     # 测试库（读取 .env.test）
+  ```
+- Before commit, run both upgrade commands locally; production follows canary/rollbackable strategies.
 - Do not rewrite published migration history; add patch migrations for fixes.
 - Testing: Model changes affecting business logic should include corresponding tests to verify data integrity.
 

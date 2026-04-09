@@ -29,6 +29,7 @@ tools: [read, edit, search, execute, todo]
 | `MissingGreenlet` / "Future attached to different loop" | 测试 DB 配置问题（缺 `NullPool`、loop scope 不一致） |
 | `422 Validation Error` | Pydantic schema 字段与请求不匹配、`to_domain()` 中做了不该做的校验 |
 | `401` 变成 `403` | `HTTPBearer` 行为，检查 `middleware.py` 的自定义异常处理器 |
+| `UndefinedColumnError` / 测试时报列不存在 | 开发库已迁移但测试库未同步；运行 `cd backend && uv run alembic -x db=test upgrade head` |
 | 测试数据污染（并发冲突） | 未使用 `TEST_PREFIX = "__pytest__"` + run-unique 后缀 |
 | mypy / ruff 报错 | 缺类型注解、错误的 import 顺序、unused import |
 | 前端 TypeScript 报错 | `types/index.ts` 与后端 schema 不同步、`any` 类型、nullable 处理不当 |
