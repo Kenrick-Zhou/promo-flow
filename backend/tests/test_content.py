@@ -45,7 +45,7 @@ async def employee_client(client: AsyncClient, employee_user: User) -> AsyncClie
 @pytest_asyncio.fixture
 async def primary_category(db: AsyncSession) -> Category:
     category = Category(
-        name=_n("一级类目"),
+        name=_n(f"一级类目_{uuid.uuid4().hex[:4]}"),
         description="测试一级类目",
     )
     db.add(category)
@@ -57,7 +57,7 @@ async def primary_category(db: AsyncSession) -> Category:
 @pytest_asyncio.fixture
 async def secondary_category(db: AsyncSession, primary_category: Category) -> Category:
     category = Category(
-        name=_n("二级类目"),
+        name=_n(f"二级类目_{uuid.uuid4().hex[:4]}"),
         description="测试二级类目",
         parent_id=primary_category.id,
     )
@@ -78,6 +78,46 @@ async def test_health(client: AsyncClient):
 async def test_list_contents_unauthenticated(client: AsyncClient):
     resp = await client.get("/api/v1/contents")
     assert resp.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_get_presigned_upload_url_includes_signed_headers(
+    employee_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    async def fake_generate_presigned_upload_url(
+        file_key: str,
+        expires: int = 300,
+        headers: dict[str, str] | None = None,
+    ) -> str:
+        assert file_key == "uploads/fixed/demo.jpg"
+        assert expires == 300
+        assert headers == {"Content-Type": "image/jpeg"}
+        return "https://example.com/upload"
+
+    monkeypatch.setattr(
+        content_router,
+        "generate_file_key",
+        lambda filename: "uploads/fixed/demo.jpg",
+    )
+    monkeypatch.setattr(
+        content_router,
+        "generate_presigned_upload_url",
+        fake_generate_presigned_upload_url,
+    )
+
+    resp = await employee_client.get(
+        "/api/v1/contents/presigned-upload",
+        params={"filename": "demo.jpg", "content_type": "image/jpeg"},
+    )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data == {
+        "upload_url": "https://example.com/upload",
+        "file_key": "uploads/fixed/demo.jpg",
+        "upload_headers": {"Content-Type": "image/jpeg"},
+    }
 
 
 @pytest.mark.asyncio

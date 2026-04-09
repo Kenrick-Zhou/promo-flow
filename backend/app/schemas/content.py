@@ -100,8 +100,13 @@ class ContentListOut(BaseModel):
 class PresignedUrlOut(BaseModel):
     upload_url: str
     file_key: str
+    upload_headers: dict[str, str]
 
     @classmethod
     def from_domain(cls, output: PresignedUrlOutput) -> PresignedUrlOut:
         """Construct HTTP response from domain output."""
-        return cls(upload_url=output.upload_url, file_key=output.file_key)
+        return cls(
+            upload_url=output.upload_url,
+            file_key=output.file_key,
+            upload_headers=output.upload_headers,
+        )

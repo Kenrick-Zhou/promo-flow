@@ -150,3 +150,4 @@ class PresignedUrlOutput:
 
     upload_url: str
     file_key: str
+    upload_headers: dict[str, str]

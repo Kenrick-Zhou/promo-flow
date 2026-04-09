@@ -42,12 +42,21 @@ router = APIRouter(prefix="/contents", tags=["content"])
 async def get_presigned_upload_url_route(
     filename: str,
     current_user: Annotated[User, Depends(get_current_user)],
+    content_type: str | None = None,
 ):
     """Get a presigned OSS PUT URL for direct browser upload."""
     file_key = generate_file_key(filename)
-    upload_url = await generate_presigned_upload_url(file_key)
+    upload_headers = {"Content-Type": content_type} if content_type else {}
+    upload_url = await generate_presigned_upload_url(
+        file_key,
+        headers=upload_headers or None,
+    )
     return PresignedUrlOut.from_domain(
-        PresignedUrlOutput(upload_url=upload_url, file_key=file_key)
+        PresignedUrlOutput(
+            upload_url=upload_url,
+            file_key=file_key,
+            upload_headers=upload_headers,
+        )
     )
 
 

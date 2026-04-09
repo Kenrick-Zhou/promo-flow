@@ -25,6 +25,14 @@ def _presigned_upload_url(file_key: str, expires: int = 300) -> str:
     return str(_bucket.sign_url("PUT", file_key, expires))
 
 
+def _presigned_upload_url_with_headers(
+    file_key: str,
+    expires: int = 300,
+    headers: dict[str, str] | None = None,
+) -> str:
+    return str(_bucket.sign_url("PUT", file_key, expires, headers=headers))
+
+
 def _presigned_download_url(file_key: str, expires: int = 3600) -> str:
     return str(_bucket.sign_url("GET", file_key, expires))
 
@@ -49,9 +57,18 @@ def generate_file_key(filename: str, prefix: str = "uploads") -> str:
     return _generate_file_key(filename, prefix)
 
 
-async def generate_presigned_upload_url(file_key: str, expires: int = 300) -> str:
+async def generate_presigned_upload_url(
+    file_key: str,
+    expires: int = 300,
+    headers: dict[str, str] | None = None,
+) -> str:
     """Return a presigned PUT URL for direct browser upload."""
-    return await run_in_threadpool(_presigned_upload_url, file_key, expires)
+    return await run_in_threadpool(
+        _presigned_upload_url_with_headers,
+        file_key,
+        expires,
+        headers,
+    )
 
 
 async def generate_presigned_download_url(file_key: str, expires: int = 3600) -> str:

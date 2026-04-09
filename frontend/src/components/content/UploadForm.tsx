@@ -15,6 +15,33 @@ interface Props {
   onSuccess?: () => void
 }
 
+function getErrorMessage(error: unknown): string {
+  if (error instanceof TypeError) {
+    return '文件上传被对象存储拦截，请联系管理员检查 OSS 跨域（CORS）配置'
+  }
+
+  if (
+    typeof error === 'object' &&
+    error !== null &&
+    'response' in error &&
+    typeof error.response === 'object' &&
+    error.response !== null &&
+    'data' in error.response &&
+    typeof error.response.data === 'object' &&
+    error.response.data !== null &&
+    'message' in error.response.data &&
+    typeof error.response.data.message === 'string'
+  ) {
+    return error.response.data.message
+  }
+
+  if (error instanceof Error && error.message) {
+    return error.message
+  }
+
+  return '上传失败，请重试'
+}
+
 function detectContentType(filename: string): ContentType | null {
   const ext = filename.split('.').pop()?.toLowerCase()
   if (!ext) return null
@@ -79,8 +106,20 @@ export default function UploadForm({ onSuccess }: Props) {
     if (!file || !contentType || !secondaryCategoryId) return
     setError(null)
     try {
-      const { upload_url, file_key } = await getPresignedUrl(file.name)
-      await fetch(upload_url, { method: 'PUT', body: file })
+      const uploadContentType = file.type || 'application/octet-stream'
+      const { upload_url, file_key, upload_headers } = await getPresignedUrl(
+        file.name,
+        uploadContentType,
+      )
+      const uploadResponse = await fetch(upload_url, {
+        method: 'PUT',
+        body: file,
+        headers: upload_headers,
+      })
+      if (!uploadResponse.ok) {
+        throw new Error(`文件上传失败（HTTP ${uploadResponse.status}）`)
+      }
+
       await createContent({
         description: description || undefined,
         tag_names: selectedTags,
@@ -89,8 +128,8 @@ export default function UploadForm({ onSuccess }: Props) {
         file_key,
       })
       onSuccess?.()
-    } catch {
-      setError('上传失败，请重试')
+    } catch (submitError: unknown) {
+      setError(getErrorMessage(submitError))
     }
   }
 

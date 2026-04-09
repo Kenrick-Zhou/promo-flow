@@ -28,9 +28,15 @@ export function useContent() {
     }
   }, [])
 
-  const getPresignedUrl = useCallback(async (filename: string) => {
-    const { data } = await api.get('/contents/presigned-upload', { params: { filename } })
-    return data as { upload_url: string; file_key: string }
+  const getPresignedUrl = useCallback(async (filename: string, contentType?: string) => {
+    const { data } = await api.get('/contents/presigned-upload', {
+      params: { filename, content_type: contentType },
+    })
+    return data as {
+      upload_url: string
+      file_key: string
+      upload_headers: Record<string, string>
+    }
   }, [])
 
   const createContent = useCallback(
