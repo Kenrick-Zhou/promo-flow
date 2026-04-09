@@ -147,14 +147,15 @@ async def test_create_content_without_title(
 
     assert resp.status_code == 201
     data = resp.json()
-    assert data["title"] is None
+    assert data["title"] == "待AI生成"
+    assert data["ai_status"] == "pending"
     assert data["description"] == "测试描述"
     assert data["category_id"] == secondary_category.id
     assert data["tags"] == [_n("标签一")]
 
     result = await db.execute(select(Content).where(Content.id == data["id"]))
     content = result.scalar_one()
-    assert content.title is None
+    assert content.title == "待AI生成"
 
 
 @pytest.mark.asyncio

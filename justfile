@@ -117,6 +117,10 @@ fmt: be-fmt fe-fmt
 # 静态检查全部代码（后端 + 前端）
 lint: be-lint fe-lint fe-typecheck
 
+# 统计项目代码总量（排除虚拟环境、构建产物和缓存目录）
+cloc:
+    cloc . --exclude-dir=.venv,node_modules,dist,build,coverage,.pytest_cache,.mypy_cache,__pycache__,.git,.vite
+
 # 运行所有测试
 test: be-test
 

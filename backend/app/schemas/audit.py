@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.domains.content import (
     AuditContentCommand,
     AuditDecision,
     AuditLogOutput,
+    EditContentMetadataCommand,
     SearchContentCommand,
     SearchResultOutput,
 )
@@ -71,4 +72,17 @@ class SearchResultOut(BaseModel):
         return cls(
             content=ContentOut.from_domain(output.content),
             score=output.score,
+        )
+
+
+class ContentMetadataEditIn(BaseModel):
+    title: str | None = Field(None, max_length=256)
+    ai_summary: str | None = None
+
+    def to_domain(self, *, content_id: int) -> EditContentMetadataCommand:
+        """Convert HTTP request to domain command."""
+        return EditContentMetadataCommand(
+            content_id=content_id,
+            title=self.title,
+            ai_summary=self.ai_summary,
         )

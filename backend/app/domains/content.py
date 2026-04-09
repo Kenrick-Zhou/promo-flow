@@ -34,6 +34,15 @@ class UserRole(str, enum.Enum):
     admin = "admin"
 
 
+class AiStatus(str, enum.Enum):
+    """AI processing status for content."""
+
+    pending = "pending"
+    processing = "processing"
+    completed = "completed"
+    failed = "failed"
+
+
 class AuditDecision(str, enum.Enum):
     """Audit review decisions."""
 
@@ -88,6 +97,15 @@ class SearchContentCommand:
     content_type: str | None = None
 
 
+@dataclass(slots=True)
+class EditContentMetadataCommand:
+    """Command for reviewer editing title/summary."""
+
+    content_id: int
+    title: str | None = None
+    ai_summary: str | None = None
+
+
 # ============================================================
 # Output Objects
 # ============================================================
@@ -108,6 +126,9 @@ class ContentOutput:
     file_size: int | None
     ai_summary: str | None
     ai_keywords: list[str]
+    ai_status: AiStatus
+    ai_error: str | None
+    ai_processed_at: str | None
     uploaded_by: int
     category_id: int | None
     category_name: str | None

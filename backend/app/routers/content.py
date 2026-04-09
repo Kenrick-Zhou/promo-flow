@@ -160,18 +160,43 @@ async def delete_content_route(
 
 async def _run_ai_analysis(content_id: int, file_key: str, content_type: str) -> None:
     """Background task: analyze content with AI and update embedding."""
+    import logging
+
     from app.db.session import AsyncSessionLocal
-    from app.services.content import update_content_ai_fields
+    from app.services.content import (
+        mark_content_ai_failed,
+        mark_content_ai_processing,
+        update_content_ai_fields,
+    )
     from app.services.infrastructure.ai import analyze_content, generate_embedding
 
-    file_url = get_public_url(file_key)
-    result = await analyze_content(file_url, content_type)
-    summary = result.get("summary", "")
-    keywords = result.get("keywords", [])
-    embedding_text = f"{summary} {' '.join(keywords)}"
-    embedding = await generate_embedding(embedding_text)
+    logger = logging.getLogger(__name__)
 
     async with AsyncSessionLocal() as db:
-        await update_content_ai_fields(
-            db, content_id, summary=summary, keywords=keywords, embedding=embedding
-        )
+        await mark_content_ai_processing(db, content_id)
+
+    try:
+        file_url = get_public_url(file_key)
+        result = await analyze_content(file_url, content_type)
+        title = result.get("title", "")
+        summary = result.get("summary", "")
+        keywords = result.get("keywords", [])
+        parts = [p for p in [title, summary, " ".join(keywords)] if p]
+        embedding_text = " ".join(parts)
+        embedding = await generate_embedding(embedding_text)
+
+        async with AsyncSessionLocal() as db:
+            await update_content_ai_fields(
+                db,
+                content_id,
+                title=title,
+                summary=summary,
+                keywords=keywords,
+                embedding=embedding,
+            )
+    except Exception:
+        logger.exception("AI analysis failed for content %s", content_id)
+        async with AsyncSessionLocal() as db:
+            await mark_content_ai_failed(
+                db, content_id, error="AI 分析失败，请稍后重试"
+            )

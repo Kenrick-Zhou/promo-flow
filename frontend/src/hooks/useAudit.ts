@@ -1,10 +1,15 @@
 import { useCallback, useState } from 'react'
 import api from '@/services/api'
-import type { ContentListOut } from '@/types'
+import type { Content, ContentListOut } from '@/types'
 
 interface AuditDecision {
   status: 'approved' | 'rejected'
   comments?: string
+}
+
+interface MetadataEdit {
+  title?: string
+  ai_summary?: string
 }
 
 export function useAudit() {
@@ -29,5 +34,10 @@ export function useAudit() {
     await api.post(`/audit/${id}`, decision)
   }, [])
 
-  return { loading, error, listPending, submitAudit }
+  const editMetadata = useCallback(async (id: number, edit: MetadataEdit): Promise<Content> => {
+    const { data } = await api.patch<Content>(`/audit/${id}/metadata`, edit)
+    return data
+  }, [])
+
+  return { loading, error, listPending, submitAudit, editMetadata }
 }

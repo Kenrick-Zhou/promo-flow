@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+from datetime import UTC
+
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
 
 from app.domains.content import (
+    AiStatus,
     AuditContentCommand,
     AuditDecision,
     AuditLogOutput,
@@ -15,6 +18,7 @@ from app.domains.content import (
     ContentStatus,
     ContentType,
     CreateContentCommand,
+    EditContentMetadataCommand,
     UpdateContentCommand,
 )
 from app.models.audit_log import AuditLog
@@ -50,6 +54,11 @@ def _content_to_output(content: Content) -> ContentOutput:
         file_size=content.file_size,
         ai_summary=content.ai_summary,
         ai_keywords=content.ai_keywords or [],
+        ai_status=AiStatus(content.ai_status),
+        ai_error=content.ai_error,
+        ai_processed_at=(
+            str(content.ai_processed_at) if content.ai_processed_at else None
+        ),
         uploaded_by=content.uploaded_by,
         category_id=content.category_id,
         category_name=category.name if category else None,
@@ -239,17 +248,55 @@ async def update_content_ai_fields(
     db: AsyncSession,
     content_id: int,
     *,
+    title: str,
     summary: str,
     keywords: list[str],
     embedding: list[float],
 ) -> None:
     """Update AI-generated fields on content."""
+    from datetime import datetime
+
     content = await db.get(Content, content_id)
     if content is None:
         return
+    if title:
+        content.title = title
     content.ai_summary = summary
     content.ai_keywords = keywords
     content.embedding = embedding
+    content.ai_status = AiStatus.completed
+    content.ai_error = None
+    content.ai_processed_at = datetime.now(UTC)
+    await db.commit()
+
+
+async def mark_content_ai_failed(
+    db: AsyncSession,
+    content_id: int,
+    *,
+    error: str,
+) -> None:
+    """Mark AI processing as failed."""
+    from datetime import datetime
+
+    content = await db.get(Content, content_id)
+    if content is None:
+        return
+    content.ai_status = AiStatus.failed
+    content.ai_error = error
+    content.ai_processed_at = datetime.now(UTC)
+    await db.commit()
+
+
+async def mark_content_ai_processing(
+    db: AsyncSession,
+    content_id: int,
+) -> None:
+    """Mark content AI status as processing."""
+    content = await db.get(Content, content_id)
+    if content is None:
+        return
+    content.ai_status = AiStatus.processing
     await db.commit()
 
 
@@ -287,3 +334,18 @@ async def audit_content(
         audit_comments=audit_log.audit_comments,
         audit_time=str(audit_log.audit_time),
     )
+
+
+async def edit_content_metadata(
+    db: AsyncSession,
+    *,
+    command: EditContentMetadataCommand,
+) -> ContentOutput:
+    """Allow reviewer/admin to edit content title and/or summary."""
+    content = await get_content_orm(db, command.content_id)
+    if command.title is not None:
+        content.title = command.title
+    if command.ai_summary is not None:
+        content.ai_summary = command.ai_summary
+    await db.commit()
+    return await get_content(db, command.content_id)

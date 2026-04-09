@@ -15,6 +15,7 @@ export interface TokenOut {
 
 export type ContentStatus = 'pending' | 'approved' | 'rejected'
 export type ContentType = 'image' | 'video' | 'document'
+export type AiStatus = 'pending' | 'processing' | 'completed' | 'failed'
 
 export interface Content {
   id: number
@@ -28,6 +29,9 @@ export interface Content {
   file_size: number | null
   ai_summary: string | null
   ai_keywords: string[]
+  ai_status: AiStatus
+  ai_error: string | null
+  ai_processed_at: string | null
   uploaded_by: number
   category_id: number | null
   category_name: string | null

@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.domains.content import (
+    AiStatus,
     ContentOutput,
     ContentStatus,
     ContentType,
@@ -32,6 +33,11 @@ def _content_to_output(content: Content) -> ContentOutput:
         file_size=content.file_size,
         ai_summary=content.ai_summary,
         ai_keywords=content.ai_keywords or [],
+        ai_status=AiStatus(content.ai_status),
+        ai_error=content.ai_error,
+        ai_processed_at=(
+            str(content.ai_processed_at) if content.ai_processed_at else None
+        ),
         uploaded_by=content.uploaded_by,
         category_id=content.category_id,
         category_name=category.name if category else None,

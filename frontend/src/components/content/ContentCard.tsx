@@ -13,7 +13,16 @@ const statusLabel: Record<string, { text: string; className: string }> = {
 
 export default function ContentCard({ content, onClick }: Props) {
   const badge = statusLabel[content.status]
-  const title = content.title ?? 'AI 标题生成中'
+
+  const aiStatusText: Record<string, string> = {
+    pending: 'AI 待处理',
+    processing: 'AI 分析中…',
+    failed: 'AI 分析失败',
+  }
+  const title =
+    content.ai_status === 'completed'
+      ? (content.title ?? '未命名')
+      : (aiStatusText[content.ai_status] ?? content.title ?? '未命名')
 
   return (
     <article

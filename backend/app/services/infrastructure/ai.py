@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import json
+import re
 
 import dashscope
 from dashscope import MultiModalConversation
 from openai import AsyncOpenAI
+from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
 from app.core.config import settings
+from app.prompts import render
 
 dashscope.api_key = settings.DASHSCOPE_API_KEY
 
@@ -22,20 +25,44 @@ _dashscope_compat = AsyncOpenAI(
 EMBEDDING_MODEL = "text-embedding-v3"
 EMBEDDING_DIM = 1024
 
+_CONTENT_TYPE_LABELS = {
+    "image": "图片",
+    "video": "视频",
+    "document": "文档",
+}
+
+
+class _AnalysisResponse(BaseModel):
+    """LLM response schema for content analysis. Internal use only."""
+
+    title: str = ""
+    summary: str = ""
+    keywords: list[str] = Field(default_factory=list)
+
+
+def _extract_json(text: str) -> str:
+    """Extract JSON object from LLM response that may contain markdown fences."""
+    # Try to find JSON inside ```json ... ``` or ``` ... ```
+    match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL)
+    if match:
+        return match.group(1)
+    # Try to find bare JSON object
+    match = re.search(r"\{.*\}", text, re.DOTALL)
+    if match:
+        return match.group(0)
+    return text
+
 
 def _call_multimodal(file_url: str, content_type: str) -> dict:
     """Sync call to Qianwen multimodal model."""
+    content_type_label = _CONTENT_TYPE_LABELS.get(content_type, "素材")
+    prompt_text = render("content_analysis.j2", content_type_label=content_type_label)
+
     messages = [
         {
             "role": "user",
             "content": [
-                {
-                    "type": "text",
-                    "text": (
-                        "请分析以下营销素材，输出一段简洁的摘要（100字以内）和5个关键词。"
-                        '以JSON格式返回：{"summary": "...", "keywords": ["..."]}'
-                    ),
-                },
+                {"type": "text", "text": prompt_text},
                 {
                     "type": "image" if content_type == "image" else "video",
                     "image": file_url,
@@ -51,10 +78,11 @@ def _call_multimodal(file_url: str, content_type: str) -> dict:
 
     try:
         text = response.output.choices[0].message.content[0]["text"]
-        result: dict[str, object] = json.loads(text)
-        return result
+        json_str = _extract_json(text)
+        parsed = _AnalysisResponse.model_validate(json.loads(json_str))
+        return parsed.model_dump()
     except Exception:
-        return {"summary": "", "keywords": []}
+        return {"title": "", "summary": "", "keywords": []}
 
 
 async def analyze_content(file_url: str, content_type: str) -> dict:
@@ -78,11 +106,9 @@ async def generate_embedding(text: str) -> list[float]:
 async def generate_rag_response(query: str, context_docs: list[str]) -> str:
     """Generate a natural language response using retrieved contexts (RAG)."""
     context = "\n\n".join(f"[{i + 1}] {doc}" for i, doc in enumerate(context_docs))
+    system_prompt = render("rag_system.j2")
     messages = [
-        {
-            "role": "system",
-            "content": "你是一个营销素材助手，根据检索到的素材信息回答用户问题。",
-        },
+        {"role": "system", "content": system_prompt},
         {
             "role": "user",
             "content": f"相关素材信息：\n{context}\n\n用户问题：{query}",

@@ -61,6 +61,9 @@ class ContentOut(BaseModel):
     file_size: int | None
     ai_summary: str | None
     ai_keywords: list[str]
+    ai_status: str
+    ai_error: str | None
+    ai_processed_at: str | None
     uploaded_by: int
     category_id: int | None
     category_name: str | None
@@ -83,6 +86,9 @@ class ContentOut(BaseModel):
             file_size=output.file_size,
             ai_summary=output.ai_summary,
             ai_keywords=output.ai_keywords,
+            ai_status=output.ai_status.value,
+            ai_error=output.ai_error,
+            ai_processed_at=output.ai_processed_at,
             uploaded_by=output.uploaded_by,
             category_id=output.category_id,
             category_name=output.category_name,

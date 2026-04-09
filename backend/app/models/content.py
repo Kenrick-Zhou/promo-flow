@@ -7,7 +7,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base_class import Base
-from app.domains.content import ContentStatus, ContentType
+from app.domains.content import AiStatus, ContentStatus, ContentType
 from app.models.tag import content_tags
 
 if TYPE_CHECKING:
@@ -23,7 +23,7 @@ class Content(Base):
     __tablename__ = "contents"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    title: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    title: Mapped[str] = mapped_column(String(256), nullable=False, default="待AI生成")
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     content_type: Mapped[ContentType] = mapped_column(
         Enum(ContentType, native_enum=False), nullable=False
@@ -45,6 +45,15 @@ class Content(Base):
     ai_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     ai_keywords: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
     embedding: Mapped[list | None] = mapped_column(Vector(EMBEDDING_DIM), nullable=True)
+    ai_status: Mapped[AiStatus] = mapped_column(
+        Enum(AiStatus, native_enum=False),
+        nullable=False,
+        default=AiStatus.pending,
+    )
+    ai_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    ai_processed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     # Category (secondary/leaf category)
     category_id: Mapped[int | None] = mapped_column(
