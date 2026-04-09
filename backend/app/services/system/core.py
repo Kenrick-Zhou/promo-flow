@@ -38,6 +38,7 @@ def _category_to_output(cat: Category) -> CategoryOutput:
     return CategoryOutput(
         id=cat.id,
         name=cat.name,
+        description=cat.description,
         parent_id=cat.parent_id,
         sort_order=cat.sort_order,
         created_at=str(cat.created_at),
@@ -57,6 +58,7 @@ def _category_to_tree_output(
     return CategoryTreeOutput(
         id=cat.id,
         name=cat.name,
+        description=cat.description,
         parent_id=cat.parent_id,
         sort_order=cat.sort_order,
         children=children,
@@ -114,6 +116,7 @@ async def create_category(
 
     cat = Category(
         name=command.name,
+        description=command.description,
         parent_id=command.parent_id,
         sort_order=command.sort_order,
     )
@@ -149,6 +152,9 @@ async def update_category(
         if existing.scalars().first() is not None:
             raise DuplicateCategoryError(name=command.name)
         cat.name = command.name
+
+    if command.description is not None:
+        cat.description = command.description
 
     if command.sort_order is not None:
         cat.sort_order = command.sort_order

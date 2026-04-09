@@ -102,11 +102,13 @@ async def test_create_category_as_employee_forbidden(employee_client: AsyncClien
 @pytest.mark.asyncio
 async def test_create_primary_category(admin_client: AsyncClient):
     resp = await admin_client.post(
-        "/api/v1/admin/categories", json={"name": _n("健康资讯")}
+        "/api/v1/admin/categories",
+        json={"name": _n("健康资讯"), "description": "健康相关资讯类目"},
     )
     assert resp.status_code == 201
     data = resp.json()
     assert _n("健康资讯") in data["name"]
+    assert data["description"] == "健康相关资讯类目"
     assert data["parent_id"] is None
     assert "id" in data
 
@@ -114,14 +116,19 @@ async def test_create_primary_category(admin_client: AsyncClient):
 @pytest.mark.asyncio
 async def test_create_secondary_category(admin_client: AsyncClient):
     primary = await admin_client.post(
-        "/api/v1/admin/categories", json={"name": _n("产品介绍")}
+        "/api/v1/admin/categories",
+        json={"name": _n("产品介绍"), "description": "产品介绍类目"},
     )
     assert primary.status_code == 201
     parent_id = primary.json()["id"]
 
     resp = await admin_client.post(
         "/api/v1/admin/categories",
-        json={"name": _n("营养补充剂"), "parent_id": parent_id},
+        json={
+            "name": _n("营养补充剂"),
+            "description": "营养补充剂子类",
+            "parent_id": parent_id,
+        },
     )
     assert resp.status_code == 201
     data = resp.json()
@@ -130,9 +137,13 @@ async def test_create_secondary_category(admin_client: AsyncClient):
 
 @pytest.mark.asyncio
 async def test_create_category_duplicate_name(admin_client: AsyncClient):
-    await admin_client.post("/api/v1/admin/categories", json={"name": _n("重复类目")})
+    await admin_client.post(
+        "/api/v1/admin/categories",
+        json={"name": _n("重复类目"), "description": "重复测试"},
+    )
     resp = await admin_client.post(
-        "/api/v1/admin/categories", json={"name": _n("重复类目")}
+        "/api/v1/admin/categories",
+        json={"name": _n("重复类目"), "description": "重复测试"},
     )
     assert resp.status_code == 409
     assert resp.json()["error_code"] == "duplicate_category"
@@ -141,15 +152,18 @@ async def test_create_category_duplicate_name(admin_client: AsyncClient):
 @pytest.mark.asyncio
 async def test_update_category(admin_client: AsyncClient):
     created = await admin_client.post(
-        "/api/v1/admin/categories", json={"name": _n("旧名称")}
+        "/api/v1/admin/categories",
+        json={"name": _n("旧名称"), "description": "原始说明"},
     )
     cat_id = created.json()["id"]
 
     resp = await admin_client.patch(
-        f"/api/v1/admin/categories/{cat_id}", json={"name": _n("新名称")}
+        f"/api/v1/admin/categories/{cat_id}",
+        json={"name": _n("新名称"), "description": "更新后说明"},
     )
     assert resp.status_code == 200
     assert resp.json()["name"] == _n("新名称")
+    assert resp.json()["description"] == "更新后说明"
 
 
 @pytest.mark.asyncio
@@ -164,7 +178,8 @@ async def test_update_category_not_found(admin_client: AsyncClient):
 @pytest.mark.asyncio
 async def test_delete_category(admin_client: AsyncClient):
     created = await admin_client.post(
-        "/api/v1/admin/categories", json={"name": _n("待删除类目")}
+        "/api/v1/admin/categories",
+        json={"name": _n("待删除类目"), "description": "待删除说明"},
     )
     cat_id = created.json()["id"]
     resp = await admin_client.delete(f"/api/v1/admin/categories/{cat_id}")
@@ -174,12 +189,17 @@ async def test_delete_category(admin_client: AsyncClient):
 @pytest.mark.asyncio
 async def test_delete_category_with_children(admin_client: AsyncClient):
     parent = await admin_client.post(
-        "/api/v1/admin/categories", json={"name": _n("父类目")}
+        "/api/v1/admin/categories",
+        json={"name": _n("父类目"), "description": "父类目说明"},
     )
     parent_id = parent.json()["id"]
     await admin_client.post(
         "/api/v1/admin/categories",
-        json={"name": _n("子类目"), "parent_id": parent_id},
+        json={
+            "name": _n("子类目"),
+            "description": "子类目说明",
+            "parent_id": parent_id,
+        },
     )
     resp = await admin_client.delete(f"/api/v1/admin/categories/{parent_id}")
     assert resp.status_code == 409
@@ -189,12 +209,17 @@ async def test_delete_category_with_children(admin_client: AsyncClient):
 @pytest.mark.asyncio
 async def test_list_categories_returns_tree(admin_client: AsyncClient):
     primary = await admin_client.post(
-        "/api/v1/admin/categories", json={"name": _n("类目树根")}
+        "/api/v1/admin/categories",
+        json={"name": _n("类目树根"), "description": "树根说明"},
     )
     parent_id = primary.json()["id"]
     await admin_client.post(
         "/api/v1/admin/categories",
-        json={"name": _n("类目树叶"), "parent_id": parent_id},
+        json={
+            "name": _n("类目树叶"),
+            "description": "树叶说明",
+            "parent_id": parent_id,
+        },
     )
 
     resp = await admin_client.get("/api/v1/categories")

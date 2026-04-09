@@ -1,20 +1,5 @@
 import { useEffect, useState } from 'react'
-import { GripVertical, Plus, Trash2, X } from 'lucide-react'
-import {
-  DndContext,
-  PointerSensor,
-  closestCenter,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-} from '@dnd-kit/core'
-import {
-  SortableContext,
-  arrayMove,
-  horizontalListSortingStrategy,
-  useSortable,
-} from '@dnd-kit/sortable'
-import { CSS } from '@dnd-kit/utilities'
+import { Plus, Trash2, X } from 'lucide-react'
 import api from '@/services/api'
 import { useSystem } from '@/hooks/useSystem'
 import type { CategoryTree, Tag, User } from '@/types'
@@ -151,11 +136,15 @@ function CategoriesTab() {
   const { listCategories, createCategory, updateCategory, deleteCategory } = useSystem()
   const [categories, setCategories] = useState<CategoryTree[]>([])
   const [newPrimaryName, setNewPrimaryName] = useState('')
+  const [newPrimaryDesc, setNewPrimaryDesc] = useState('')
   const [addingChildFor, setAddingChildFor] = useState<number | null>(null)
   const [newChildName, setNewChildName] = useState('')
+  const [newChildDesc, setNewChildDesc] = useState('')
   const [editingId, setEditingId] = useState<number | null>(null)
   const [editName, setEditName] = useState('')
+  const [editDesc, setEditDesc] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [submitting, setSubmitting] = useState(false)
 
   async function refresh() {
     const data = await listCategories()
@@ -170,35 +159,47 @@ function CategoriesTab() {
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleAddPrimary() {
-    if (!newPrimaryName.trim()) return
+    if (!newPrimaryName.trim() || !newPrimaryDesc.trim() || submitting) return
     setError(null)
+    setSubmitting(true)
     try {
-      await createCategory({ name: newPrimaryName.trim() })
+      await createCategory({ name: newPrimaryName.trim(), description: newPrimaryDesc.trim() })
       setNewPrimaryName('')
+      setNewPrimaryDesc('')
       await refresh()
     } catch {
       setError('创建失败，类目名可能已存在')
+    } finally {
+      setSubmitting(false)
     }
   }
 
   async function handleAddChild(parentId: number) {
-    if (!newChildName.trim()) return
+    if (!newChildName.trim() || !newChildDesc.trim() || submitting) return
     setError(null)
+    setSubmitting(true)
     try {
-      await createCategory({ name: newChildName.trim(), parent_id: parentId })
+      await createCategory({
+        name: newChildName.trim(),
+        description: newChildDesc.trim(),
+        parent_id: parentId,
+      })
       setNewChildName('')
+      setNewChildDesc('')
       setAddingChildFor(null)
       await refresh()
     } catch {
       setError('创建失败，类目名可能已存在')
+    } finally {
+      setSubmitting(false)
     }
   }
 
   async function handleSaveEdit(id: number) {
-    if (!editName.trim()) return
+    if (!editName.trim() || !editDesc.trim()) return
     setError(null)
     try {
-      await updateCategory(id, { name: editName.trim() })
+      await updateCategory(id, { name: editName.trim(), description: editDesc.trim() })
       setEditingId(null)
       await refresh()
     } catch {
@@ -225,22 +226,33 @@ function CategoriesTab() {
       )}
 
       {/* Add primary category */}
-      <div className="flex gap-2">
-        <input
-          type="text"
-          className="flex-1 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm text-gray-700 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
-          value={newPrimaryName}
-          onChange={(e) => setNewPrimaryName(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && handleAddPrimary()}
-          placeholder="输入一级类目名称"
-        />
-        <button
-          onClick={handleAddPrimary}
-          className="inline-flex items-center gap-1 rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700"
-        >
-          <Plus className="size-4" />
-          添加一级类目
-        </button>
+      <div className="flex flex-col gap-2 rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
+        <p className="text-sm font-medium text-gray-700 dark:text-gray-200">添加一级类目</p>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            className="w-40 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+            value={newPrimaryName}
+            onChange={(e) => setNewPrimaryName(e.target.value)}
+            placeholder="类目名称"
+          />
+          <input
+            type="text"
+            className="flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+            value={newPrimaryDesc}
+            onChange={(e) => setNewPrimaryDesc(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleAddPrimary()}
+            placeholder="类目说明（如：开业/环创/业绩/技师）"
+          />
+          <button
+            onClick={handleAddPrimary}
+            disabled={submitting}
+            className="inline-flex items-center gap-1 rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700 disabled:opacity-50"
+          >
+            <Plus className="size-4" />
+            添加
+          </button>
+        </div>
       </div>
 
       {/* Category tree */}
@@ -253,14 +265,22 @@ function CategoriesTab() {
             {/* Primary category header */}
             <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3 dark:border-gray-700">
               {editingId === primary.id ? (
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-1 mr-2">
                   <input
                     type="text"
-                    className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200"
+                    className="w-28 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200"
                     value={editName}
                     onChange={(e) => setEditName(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleSaveEdit(primary.id)}
+                    placeholder="类目名称"
                     autoFocus
+                  />
+                  <input
+                    type="text"
+                    className="flex-1 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200"
+                    value={editDesc}
+                    onChange={(e) => setEditDesc(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleSaveEdit(primary.id)}
+                    placeholder="类目说明"
                   />
                   <button
                     onClick={() => handleSaveEdit(primary.id)}
@@ -276,15 +296,23 @@ function CategoriesTab() {
                   </button>
                 </div>
               ) : (
-                <span
-                  className="font-medium text-gray-900 dark:text-white cursor-pointer hover:text-purple-600"
+                <div
+                  className="flex flex-col cursor-pointer hover:text-purple-600 group"
                   onClick={() => {
                     setEditingId(primary.id)
                     setEditName(primary.name)
+                    setEditDesc(primary.description)
                   }}
                 >
-                  {primary.name}
-                </span>
+                  <span className="font-medium text-gray-900 group-hover:text-purple-600 dark:text-white">
+                    {primary.name}
+                  </span>
+                  {primary.description && (
+                    <span className="text-xs text-gray-400 dark:text-gray-500">
+                      {primary.description}
+                    </span>
+                  )}
+                </div>
               )}
               <div className="flex items-center gap-2">
                 <button
@@ -323,8 +351,16 @@ function CategoriesTab() {
                           className="w-20 rounded border border-gray-300 bg-white px-2 py-0.5 text-xs dark:border-gray-600 dark:bg-gray-700"
                           value={editName}
                           onChange={(e) => setEditName(e.target.value)}
-                          onKeyDown={(e) => e.key === 'Enter' && handleSaveEdit(child.id)}
+                          placeholder="名称"
                           autoFocus
+                        />
+                        <input
+                          type="text"
+                          className="w-32 rounded border border-gray-300 bg-white px-2 py-0.5 text-xs dark:border-gray-600 dark:bg-gray-700"
+                          value={editDesc}
+                          onChange={(e) => setEditDesc(e.target.value)}
+                          onKeyDown={(e) => e.key === 'Enter' && handleSaveEdit(child.id)}
+                          placeholder="说明"
                         />
                         <button
                           onClick={() => handleSaveEdit(child.id)}
@@ -346,6 +382,7 @@ function CategoriesTab() {
                           onClick={() => {
                             setEditingId(child.id)
                             setEditName(child.name)
+                            setEditDesc(child.description)
                           }}
                         >
                           {child.name}
@@ -366,16 +403,24 @@ function CategoriesTab() {
                   <div className="inline-flex items-center gap-1">
                     <input
                       type="text"
-                      className="w-28 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200"
+                      className="w-24 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200"
                       value={newChildName}
                       onChange={(e) => setNewChildName(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && handleAddChild(primary.id)}
-                      placeholder="子类目名称"
+                      placeholder="名称"
                       autoFocus
+                    />
+                    <input
+                      type="text"
+                      className="w-36 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200"
+                      value={newChildDesc}
+                      onChange={(e) => setNewChildDesc(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleAddChild(primary.id)}
+                      placeholder="说明"
                     />
                     <button
                       onClick={() => handleAddChild(primary.id)}
-                      className="rounded-lg bg-purple-600 px-3 py-1.5 text-sm text-white hover:bg-purple-700"
+                      disabled={submitting}
+                      className="rounded-lg bg-purple-600 px-3 py-1.5 text-sm text-white hover:bg-purple-700 disabled:opacity-50"
                     >
                       添加
                     </button>
@@ -407,20 +452,13 @@ function CategoriesTab() {
 // ============================================================
 
 function TagsTab() {
-  const { listTags, createTag, updateTag, deleteTag, reorderTags } = useSystem()
+  const { listTags, createTag, updateTag, deleteTag } = useSystem()
   const [tags, setTags] = useState<Tag[]>([])
   const [newTagName, setNewTagName] = useState('')
   const [isSystem, setIsSystem] = useState(true)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [editName, setEditName] = useState('')
   const [error, setError] = useState<string | null>(null)
-
-  // Reorder edit mode
-  const [isReordering, setIsReordering] = useState(false)
-  const [reorderDraft, setReorderDraft] = useState<Tag[]>([])
-  const [saving, setSaving] = useState(false)
-
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
 
   async function refresh() {
     const data = await listTags()
@@ -477,42 +515,6 @@ function TagsTab() {
     }
   }
 
-  function handleEnterReorder() {
-    setReorderDraft(tags.filter((t) => t.is_system))
-    setIsReordering(true)
-    setError(null)
-  }
-
-  function handleCancelReorder() {
-    setIsReordering(false)
-    setReorderDraft([])
-  }
-
-  function handleDragEnd(event: DragEndEvent) {
-    const { active, over } = event
-    if (!over || active.id === over.id) return
-    const oldIndex = reorderDraft.findIndex((t) => t.id === active.id)
-    const newIndex = reorderDraft.findIndex((t) => t.id === over.id)
-    if (oldIndex === -1 || newIndex === -1) return
-    setReorderDraft(arrayMove(reorderDraft, oldIndex, newIndex))
-  }
-
-  async function handleSaveReorder() {
-    setSaving(true)
-    setError(null)
-    try {
-      const items = reorderDraft.map((t, i) => ({ id: t.id, sort_order: i }))
-      const updated = await reorderTags(items)
-      setTags(updated)
-      setIsReordering(false)
-      setReorderDraft([])
-    } catch {
-      setError('排序保存失败，请重试')
-    } finally {
-      setSaving(false)
-    }
-  }
-
   const systemTags = tags.filter((t) => t.is_system)
   const customTags = tags.filter((t) => !t.is_system)
 
@@ -554,73 +556,25 @@ function TagsTab() {
 
       {/* System tags */}
       <div>
-        <div className="mb-3 flex items-center justify-between">
-          <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">系统默认标签</h3>
-          {!isReordering ? (
-            <button
-              onClick={handleEnterReorder}
-              className="text-xs text-purple-600 hover:text-purple-700 dark:text-purple-400"
-            >
-              调整顺序
-            </button>
-          ) : (
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-400 dark:text-gray-500">拖拽标签调整顺序</span>
-              <button
-                onClick={handleSaveReorder}
-                disabled={saving}
-                className="rounded-lg bg-purple-600 px-3 py-1 text-xs font-medium text-white hover:bg-purple-700 disabled:opacity-50"
-              >
-                {saving ? '保存中…' : '保存顺序'}
-              </button>
-              <button
-                onClick={handleCancelReorder}
-                disabled={saving}
-                className="text-xs text-gray-400 hover:text-gray-600 disabled:opacity-50"
-              >
-                取消
-              </button>
-            </div>
+        <h3 className="mb-3 text-sm font-medium text-gray-500 dark:text-gray-400">系统默认标签</h3>
+        <div className="flex flex-wrap gap-2">
+          {systemTags.map((tag) => (
+            <TagChip
+              key={tag.id}
+              tag={tag}
+              editingId={editingId}
+              editName={editName}
+              setEditingId={setEditingId}
+              setEditName={setEditName}
+              onSave={handleSaveEdit}
+              onDelete={handleDelete}
+              onToggleSystem={handleToggleSystem}
+            />
+          ))}
+          {systemTags.length === 0 && (
+            <p className="text-sm text-gray-400 dark:text-gray-500">暂无系统默认标签</p>
           )}
         </div>
-
-        {isReordering ? (
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragEnd={handleDragEnd}
-          >
-            <SortableContext
-              items={reorderDraft.map((t) => t.id)}
-              strategy={horizontalListSortingStrategy}
-            >
-              <div className="flex flex-wrap gap-2">
-                {reorderDraft.map((tag) => (
-                  <SortableTagChip key={tag.id} tag={tag} />
-                ))}
-              </div>
-            </SortableContext>
-          </DndContext>
-        ) : (
-          <div className="flex flex-wrap gap-2">
-            {systemTags.map((tag) => (
-              <TagChip
-                key={tag.id}
-                tag={tag}
-                editingId={editingId}
-                editName={editName}
-                setEditingId={setEditingId}
-                setEditName={setEditName}
-                onSave={handleSaveEdit}
-                onDelete={handleDelete}
-                onToggleSystem={handleToggleSystem}
-              />
-            ))}
-            {systemTags.length === 0 && (
-              <p className="text-sm text-gray-400 dark:text-gray-500">暂无系统默认标签</p>
-            )}
-          </div>
-        )}
       </div>
 
       {/* Custom tags */}
@@ -659,32 +613,6 @@ interface TagChipProps {
   onSave: (id: number) => void
   onDelete: (id: number) => void
   onToggleSystem: (tag: Tag) => void
-}
-
-function SortableTagChip({ tag }: { tag: Tag }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: tag.id,
-  })
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-    zIndex: isDragging ? 10 : undefined,
-  }
-
-  return (
-    <span
-      ref={setNodeRef}
-      style={style}
-      className="inline-flex cursor-grab items-center gap-1 rounded-full bg-purple-100 px-3 py-1.5 text-sm text-purple-700 active:cursor-grabbing dark:bg-purple-900/30 dark:text-purple-300"
-      {...attributes}
-      {...listeners}
-    >
-      <GripVertical className="size-3.5 text-purple-400 dark:text-purple-500" />
-      {tag.name}
-    </span>
-  )
 }
 
 function TagChip({

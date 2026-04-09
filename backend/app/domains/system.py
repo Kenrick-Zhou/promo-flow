@@ -14,6 +14,7 @@ class CreateCategoryCommand:
     """Command for creating a new category."""
 
     name: str
+    description: str
     parent_id: int | None = None
     sort_order: int = 0
 
@@ -23,6 +24,7 @@ class UpdateCategoryCommand:
     """Command for updating a category."""
 
     name: str | None = None
+    description: str | None = None
     sort_order: int | None = None
 
 
@@ -62,6 +64,7 @@ class CategoryOutput:
 
     id: int
     name: str
+    description: str
     parent_id: int | None
     sort_order: int
     created_at: str
@@ -74,6 +77,7 @@ class CategoryTreeOutput:
 
     id: int
     name: str
+    description: str
     parent_id: int | None
     sort_order: int
     children: list[CategoryTreeOutput] = field(default_factory=list)

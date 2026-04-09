@@ -20,12 +20,14 @@ from app.domains.system import (
 
 class CategoryCreateIn(BaseModel):
     name: str = Field(..., min_length=1, max_length=64)
+    description: str = Field(..., min_length=1, max_length=256)
     parent_id: int | None = None
     sort_order: int = 0
 
     def to_domain(self) -> CreateCategoryCommand:
         return CreateCategoryCommand(
             name=self.name,
+            description=self.description,
             parent_id=self.parent_id,
             sort_order=self.sort_order,
         )
@@ -33,11 +35,13 @@ class CategoryCreateIn(BaseModel):
 
 class CategoryUpdateIn(BaseModel):
     name: str | None = Field(None, min_length=1, max_length=64)
+    description: str | None = Field(None, min_length=1, max_length=256)
     sort_order: int | None = None
 
     def to_domain(self) -> UpdateCategoryCommand:
         return UpdateCategoryCommand(
             name=self.name,
+            description=self.description,
             sort_order=self.sort_order,
         )
 
@@ -45,6 +49,7 @@ class CategoryUpdateIn(BaseModel):
 class CategoryOut(BaseModel):
     id: int
     name: str
+    description: str
     parent_id: int | None
     sort_order: int
     created_at: str
@@ -55,6 +60,7 @@ class CategoryOut(BaseModel):
         return cls(
             id=output.id,
             name=output.name,
+            description=output.description,
             parent_id=output.parent_id,
             sort_order=output.sort_order,
             created_at=output.created_at,
@@ -65,6 +71,7 @@ class CategoryOut(BaseModel):
 class CategoryTreeOut(BaseModel):
     id: int
     name: str
+    description: str
     parent_id: int | None
     sort_order: int
     children: list[CategoryTreeOut] = []
@@ -76,6 +83,7 @@ class CategoryTreeOut(BaseModel):
         return cls(
             id=output.id,
             name=output.name,
+            description=output.description,
             parent_id=output.parent_id,
             sort_order=output.sort_order,
             children=[cls.from_domain(c) for c in output.children],

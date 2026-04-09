@@ -70,6 +70,7 @@ export interface SearchResultItem {
 export interface Category {
   id: number
   name: string
+  description: string
   parent_id: number | null
   sort_order: number
   created_at: string
@@ -79,6 +80,7 @@ export interface Category {
 export interface CategoryTree {
   id: number
   name: string
+  description: string
   parent_id: number | null
   sort_order: number
   children: CategoryTree[]
@@ -88,12 +90,14 @@ export interface CategoryTree {
 
 export interface CategoryCreate {
   name: string
+  description: string
   parent_id?: number | null
   sort_order?: number
 }
 
 export interface CategoryUpdate {
   name?: string
+  description?: string
   sort_order?: number
 }
 
