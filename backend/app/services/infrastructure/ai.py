@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+from typing import Any, TypedDict, cast
 
 import dashscope
 from dashscope import MultiModalConversation
@@ -24,6 +25,8 @@ _dashscope_compat = AsyncOpenAI(
 
 EMBEDDING_MODEL = "text-embedding-v3"
 EMBEDDING_DIM = 1024
+MULTIMODAL_REQUEST_TIMEOUT = 300
+_JSON_MODE_RESPONSE_FORMAT = {"type": "json_object"}
 
 _CONTENT_TYPE_LABELS = {
     "image": "图片",
@@ -40,6 +43,12 @@ class _AnalysisResponse(BaseModel):
     keywords: list[str] = Field(default_factory=list)
 
 
+class _AnalysisResult(TypedDict):
+    title: str
+    summary: str
+    keywords: list[str]
+
+
 def _extract_json(text: str) -> str:
     """Extract JSON object from LLM response that may contain markdown fences."""
     # Try to find JSON inside ```json ... ``` or ``` ... ```
@@ -53,7 +62,40 @@ def _extract_json(text: str) -> str:
     return text
 
 
-def _call_multimodal(file_url: str, content_type: str) -> dict:
+def _build_media_part(file_url: str, content_type: str) -> dict[str, str]:
+    """Build DashScope multimodal content part for the given media type."""
+    media_key = "image" if content_type == "image" else "video"
+    return {
+        "type": media_key,
+        media_key: file_url,
+    }
+
+
+def _parse_analysis_text(text: str) -> _AnalysisResult:
+    """Parse multimodal analysis response text into a validated result."""
+    try:
+        parsed = _AnalysisResponse.model_validate_json(text)
+    except Exception:
+        json_str = _extract_json(text)
+        parsed = _AnalysisResponse.model_validate(json.loads(json_str))
+    return cast(_AnalysisResult, parsed.model_dump())
+
+
+def _empty_analysis_result() -> _AnalysisResult:
+    return {"title": "", "summary": "", "keywords": []}
+
+
+def _extract_response_text(response: Any) -> str:
+    """Extract text content from DashScope multimodal response."""
+    content = response.output.choices[0].message.content
+    if isinstance(content, list) and content:
+        first_item = content[0]
+        if isinstance(first_item, dict):
+            return str(first_item.get("text", ""))
+    return ""
+
+
+def _call_multimodal(file_url: str, content_type: str) -> _AnalysisResult:
     """Sync call to Qianwen multimodal model."""
     content_type_label = _CONTENT_TYPE_LABELS.get(content_type, "素材")
     prompt_text = render("content_analysis.j2", content_type_label=content_type_label)
@@ -63,32 +105,30 @@ def _call_multimodal(file_url: str, content_type: str) -> dict:
             "role": "user",
             "content": [
                 {"type": "text", "text": prompt_text},
-                {
-                    "type": "image" if content_type == "image" else "video",
-                    "image": file_url,
-                },
+                _build_media_part(file_url, content_type),
             ],
         }
     ]
 
-    response = MultiModalConversation.call(
-        model=settings.DASHSCOPE_VISION_MODEL,
-        messages=messages,
-    )
-
     try:
-        text = response.output.choices[0].message.content[0]["text"]
-        json_str = _extract_json(text)
-        parsed = _AnalysisResponse.model_validate(json.loads(json_str))
-        return parsed.model_dump()
+        response = cast(
+            Any,
+            MultiModalConversation.call(
+                model=settings.DASHSCOPE_VISION_MODEL,
+                messages=messages,
+                response_format=_JSON_MODE_RESPONSE_FORMAT,
+                request_timeout=MULTIMODAL_REQUEST_TIMEOUT,
+            ),
+        )
+        return _parse_analysis_text(_extract_response_text(response))
     except Exception:
-        return {"title": "", "summary": "", "keywords": []}
+        return _empty_analysis_result()
 
 
-async def analyze_content(file_url: str, content_type: str) -> dict:
+async def analyze_content(file_url: str, content_type: str) -> _AnalysisResult:
     """
     Send media to Qianwen multimodal model for analysis (sync SDK wrapped).
-    Returns {"summary": str, "keywords": list[str]}.
+    Uses JSON Mode to force structured output for content analysis.
     """
     return await run_in_threadpool(_call_multimodal, file_url, content_type)
 
