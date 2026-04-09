@@ -1,3 +1,4 @@
+import uuid
 from pathlib import Path
 
 import pytest_asyncio
@@ -29,8 +30,10 @@ if not _TEST_DB_URL:
         "(copy .env.test.example and fill in your test database credentials)."
     )
 
-# Unique prefix for all test data — makes bulk-cleanup safe and deterministic
-TEST_PREFIX = "__pytest__"
+# Each worker process gets its own unique suffix so parallel workers don't
+# delete each other's in-flight data during session-scoped cleanup.
+_WORKER_ID = uuid.uuid4().hex[:8]
+TEST_PREFIX = f"__pytest__{_WORKER_ID}_"
 
 
 @pytest_asyncio.fixture(scope="session")
