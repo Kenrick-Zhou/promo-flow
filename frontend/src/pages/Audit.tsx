@@ -215,7 +215,7 @@ export default function Audit() {
         </div>
       </div>
 
-      <div className="mb-6 inline-flex rounded-xl border border-gray-200 bg-white p-1 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+      <div className="mb-6 grid w-full grid-cols-3 rounded-xl border border-gray-200 bg-white p-1 shadow-sm dark:border-gray-700 dark:bg-gray-800">
         {AUDIT_TABS.map((tab) => {
           const isActive = tab.key === activeStatus
 
@@ -224,7 +224,7 @@ export default function Audit() {
               key={tab.key}
               type="button"
               onClick={() => setActiveStatus(tab.key)}
-              className={`rounded-lg px-4 py-2 text-sm font-medium transition ${
+              className={`rounded-lg px-4 py-2 text-center text-sm font-medium transition ${
                 isActive
                   ? 'bg-purple-600 text-white shadow-sm'
                   : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-white'
@@ -252,8 +252,8 @@ export default function Audit() {
         <div className="space-y-4">
           {items.map((item) => {
             const isEditing = editingId === item.id
-            const aiBadge = aiStatusLabel[item.ai_status]
-            const statusBadge = STATUS_BADGES[item.status]
+            const aiBadge = item.ai_status === 'completed' ? null : aiStatusLabel[item.ai_status]
+            const showActionColumn = isEditing || item.status === 'pending'
             return (
               <article
                 key={item.id}
@@ -302,11 +302,6 @@ export default function Audit() {
                   <div className="flex flex-1 items-start justify-between gap-4 p-5 min-w-0">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 min-w-0">
-                        <span
-                          className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${statusBadge.className}`}
-                        >
-                          {statusBadge.text}
-                        </span>
                         {aiBadge && (
                           <span
                             className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${aiBadge.className}`}
@@ -373,49 +368,47 @@ export default function Audit() {
                         <p className="mt-1 text-xs text-red-500">{item.ai_error}</p>
                       )}
                     </div>
-                    <div className="flex flex-col gap-2 shrink-0">
-                      {isEditing ? (
-                        <>
-                          <button
-                            onClick={() => saveEdit(item.id)}
-                            className="inline-flex items-center rounded-lg bg-blue-500 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 dark:focus:ring-offset-gray-800"
-                          >
-                            保存
-                          </button>
-                          <button
-                            onClick={cancelEdit}
-                            className="inline-flex items-center rounded-lg bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 dark:bg-gray-600 dark:text-gray-200 dark:hover:bg-gray-500 dark:focus:ring-offset-gray-800"
-                          >
-                            取消
-                          </button>
-                        </>
-                      ) : item.status === 'pending' ? (
-                        <>
-                          <button
-                            onClick={() => startEdit(item)}
-                            className="inline-flex items-center rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium text-gray-600 shadow-sm transition hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 dark:focus:ring-offset-gray-800"
-                          >
-                            编辑
-                          </button>
-                          <button
-                            onClick={() => handleAudit(item.id, 'approved')}
-                            className="inline-flex items-center rounded-lg bg-green-500 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-offset-2 dark:focus:ring-offset-gray-800"
-                          >
-                            通过
-                          </button>
-                          <button
-                            onClick={() => handleAudit(item.id, 'rejected')}
-                            className="inline-flex items-center rounded-lg bg-red-500 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-offset-2 dark:focus:ring-offset-gray-800"
-                          >
-                            驳回
-                          </button>
-                        </>
-                      ) : (
-                        <span className="text-xs text-gray-400 dark:text-gray-500">
-                          当前为{statusBadge.text}内容
-                        </span>
-                      )}
-                    </div>
+                    {showActionColumn && (
+                      <div className="flex shrink-0 flex-col gap-2">
+                        {isEditing ? (
+                          <>
+                            <button
+                              onClick={() => saveEdit(item.id)}
+                              className="inline-flex items-center rounded-lg bg-blue-500 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 dark:focus:ring-offset-gray-800"
+                            >
+                              保存
+                            </button>
+                            <button
+                              onClick={cancelEdit}
+                              className="inline-flex items-center rounded-lg bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 dark:bg-gray-600 dark:text-gray-200 dark:hover:bg-gray-500 dark:focus:ring-offset-gray-800"
+                            >
+                              取消
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button
+                              onClick={() => startEdit(item)}
+                              className="inline-flex items-center rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium text-gray-600 shadow-sm transition hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 dark:focus:ring-offset-gray-800"
+                            >
+                              编辑
+                            </button>
+                            <button
+                              onClick={() => handleAudit(item.id, 'approved')}
+                              className="inline-flex items-center rounded-lg bg-green-500 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-offset-2 dark:focus:ring-offset-gray-800"
+                            >
+                              通过
+                            </button>
+                            <button
+                              onClick={() => handleAudit(item.id, 'rejected')}
+                              className="inline-flex items-center rounded-lg bg-red-500 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-offset-2 dark:focus:ring-offset-gray-800"
+                            >
+                              驳回
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               </article>
