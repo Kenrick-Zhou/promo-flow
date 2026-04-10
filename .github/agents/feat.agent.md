@@ -105,10 +105,13 @@ uv run pytest -n 8
 ```bash
 cd frontend
 
-# 1. ESLint 检查
+# 1. Prettier 格式化
+npm run format
+
+# 2. ESLint 检查
 npm run lint
 
-# 2. TypeScript 类型检查 + 构建
+# 3. TypeScript 类型检查 + 构建
 npm run build
 ```
 

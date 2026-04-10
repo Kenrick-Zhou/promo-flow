@@ -6,6 +6,8 @@ import Upload from '@/pages/Upload'
 import Audit from '@/pages/Audit'
 import Admin from '@/pages/Admin'
 import Login from '@/pages/Login'
+import Me from '@/pages/Me'
+import MyUploads from '@/pages/MyUploads'
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const token = useAuthStore((s) => s.token)
@@ -40,6 +42,8 @@ export default function App() {
         >
           <Route index element={<Dashboard />} />
           <Route path="upload" element={<Upload />} />
+          <Route path="me" element={<Me />} />
+          <Route path="me/uploads" element={<MyUploads />} />
           <Route
             path="audit"
             element={

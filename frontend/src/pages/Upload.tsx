@@ -1,8 +1,10 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import UploadForm from '@/components/content/UploadForm'
-import { CircleCheckBig } from 'lucide-react'
+import { ArrowLeft, CircleCheckBig } from 'lucide-react'
 
 export default function Upload() {
+  const navigate = useNavigate()
   const [success, setSuccess] = useState(false)
 
   if (success) {
@@ -24,7 +26,15 @@ export default function Upload() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-gray-900 mb-6 dark:text-white">上传素材</h1>
+      <div className="mb-4 flex items-center gap-3">
+        <button
+          onClick={() => navigate('/')}
+          className="rounded-lg p-1.5 text-gray-600 transition-colors active:bg-gray-100 dark:text-gray-300 dark:active:bg-gray-700"
+        >
+          <ArrowLeft className="size-5" />
+        </button>
+        <h1 className="text-lg font-bold text-gray-900 dark:text-white">上传素材</h1>
+      </div>
       <UploadForm onSuccess={() => setSuccess(true)} />
     </div>
   )
