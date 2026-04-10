@@ -167,18 +167,27 @@ export default function Audit() {
             >
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1 min-w-0">
-                  {isEditing ? (
-                    <input
-                      type="text"
-                      value={editTitle}
-                      onChange={(e) => setEditTitle(e.target.value)}
-                      className="w-full rounded-md border border-gray-300 px-2 py-1 text-sm font-semibold text-gray-900 focus:border-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                    />
-                  ) : (
-                    <h3 className="font-semibold text-gray-900 dark:text-white">
-                      {item.title ?? '待AI生成'}
-                    </h3>
-                  )}
+                  <div className="flex items-center gap-2 min-w-0">
+                    {aiBadge && (
+                      <span
+                        className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${aiBadge.className}`}
+                      >
+                        {aiBadge.text}
+                      </span>
+                    )}
+                    {isEditing ? (
+                      <input
+                        type="text"
+                        value={editTitle}
+                        onChange={(e) => setEditTitle(e.target.value)}
+                        className="min-w-0 flex-1 rounded-md border border-gray-300 px-2 py-1 text-sm font-semibold text-gray-900 focus:border-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                      />
+                    ) : (
+                      <h3 className="min-w-0 font-semibold text-gray-900 dark:text-white">
+                        {item.title ?? '待AI生成'}
+                      </h3>
+                    )}
+                  </div>
                   <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                     {item.description}
                   </p>
@@ -191,13 +200,6 @@ export default function Audit() {
                         {t}
                       </span>
                     ))}
-                    {aiBadge && (
-                      <span
-                        className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${aiBadge.className}`}
-                      >
-                        {aiBadge.text}
-                      </span>
-                    )}
                   </div>
                   {item.ai_keywords.length > 0 && (
                     <div className="mt-2 flex flex-wrap gap-1">
