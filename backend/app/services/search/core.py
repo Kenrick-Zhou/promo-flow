@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import joinedload, selectinload
 
 from app.domains.content import (
     AiStatus,
@@ -39,6 +39,7 @@ def _content_to_output(content: Content) -> ContentOutput:
             str(content.ai_processed_at) if content.ai_processed_at else None
         ),
         uploaded_by=content.uploaded_by,
+        uploaded_by_name=content.uploader.name if content.uploader else "未知",
         category_id=content.category_id,
         category_name=category.name if category else None,
         primary_category_name=(
@@ -88,6 +89,7 @@ async def semantic_search(
         .options(
             selectinload(Content.tag_objects),
             selectinload(Content.category).selectinload(Category.parent),
+            joinedload(Content.uploader),
         )
     )
     contents = {c.id: c for c in contents_result.scalars().all()}

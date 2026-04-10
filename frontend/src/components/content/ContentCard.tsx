@@ -6,15 +6,7 @@ interface Props {
   onClick?: () => void
 }
 
-const statusLabel: Record<string, { text: string; className: string }> = {
-  pending: { text: '待审核', className: 'bg-yellow-100 text-yellow-700' },
-  approved: { text: '已通过', className: 'bg-green-100 text-green-700' },
-  rejected: { text: '已拒绝', className: 'bg-red-100 text-red-700' },
-}
-
 export default function ContentCard({ content, onClick }: Props) {
-  const badge = statusLabel[content.status]
-
   const aiStatusText: Record<string, string> = {
     pending: 'AI 待处理',
     processing: 'AI 分析中…',
@@ -59,14 +51,9 @@ export default function ContentCard({ content, onClick }: Props) {
       </div>
 
       <div className="p-4">
-        <div className="mb-1 flex items-center justify-between gap-2">
-          <h3 className="truncate text-sm font-semibold text-gray-900 dark:text-white">{title}</h3>
-          <span
-            className={`inline-flex shrink-0 items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${badge.className}`}
-          >
-            {badge.text}
-          </span>
-        </div>
+        <h3 className="mb-1 truncate text-sm font-semibold text-gray-900 dark:text-white">
+          {title}
+        </h3>
 
         {content.ai_summary && (
           <p className="mb-2 line-clamp-2 text-xs text-gray-500 dark:text-gray-400">
@@ -74,7 +61,7 @@ export default function ContentCard({ content, onClick }: Props) {
           </p>
         )}
 
-        <div className="flex flex-wrap gap-1">
+        <div className="mb-2 flex flex-wrap gap-1">
           {content.tags.slice(0, 3).map((tag) => (
             <span
               key={tag}
@@ -84,6 +71,8 @@ export default function ContentCard({ content, onClick }: Props) {
             </span>
           ))}
         </div>
+
+        <p className="text-xs text-gray-400 dark:text-gray-500">— by {content.uploaded_by_name}</p>
       </div>
     </article>
   )

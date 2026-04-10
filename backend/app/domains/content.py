@@ -130,6 +130,7 @@ class ContentOutput:
     ai_error: str | None
     ai_processed_at: str | None
     uploaded_by: int
+    uploaded_by_name: str
     category_id: int | None
     category_name: str | None
     primary_category_name: str | None

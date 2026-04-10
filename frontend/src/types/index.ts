@@ -33,6 +33,7 @@ export interface Content {
   ai_error: string | null
   ai_processed_at: string | null
   uploaded_by: number
+  uploaded_by_name: string
   category_id: number | null
   category_name: string | null
   primary_category_name: string | null

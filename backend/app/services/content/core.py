@@ -37,6 +37,7 @@ from app.services.infrastructure.storage import get_public_url
 _CONTENT_LOAD_OPTIONS = [
     selectinload(Content.tag_objects),
     joinedload(Content.category).joinedload(Category.parent),
+    joinedload(Content.uploader),
 ]
 
 
@@ -61,6 +62,7 @@ def _content_to_output(content: Content) -> ContentOutput:
             str(content.ai_processed_at) if content.ai_processed_at else None
         ),
         uploaded_by=content.uploaded_by,
+        uploaded_by_name=content.uploader.name if content.uploader else "未知",
         category_id=content.category_id,
         category_name=category.name if category else None,
         primary_category_name=(

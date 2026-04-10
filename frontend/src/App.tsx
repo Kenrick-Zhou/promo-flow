@@ -4,7 +4,6 @@ import { useAuthStore } from '@/store/auth'
 import Dashboard from '@/pages/Dashboard'
 import Upload from '@/pages/Upload'
 import Audit from '@/pages/Audit'
-import Search from '@/pages/Search'
 import Admin from '@/pages/Admin'
 import Login from '@/pages/Login'
 
@@ -41,7 +40,6 @@ export default function App() {
         >
           <Route index element={<Dashboard />} />
           <Route path="upload" element={<Upload />} />
-          <Route path="search" element={<Search />} />
           <Route
             path="audit"
             element={

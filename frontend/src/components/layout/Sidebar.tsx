@@ -1,11 +1,10 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
-import { LayoutGrid, Upload, Search, ClipboardCheck, Settings, LogOut } from 'lucide-react'
+import { LayoutGrid, Upload, ClipboardCheck, Settings, LogOut } from 'lucide-react'
 
 const navItems = [
   { to: '/', label: '素材广场', icon: LayoutGrid },
   { to: '/upload', label: '上传素材', icon: Upload },
-  { to: '/search', label: '智能搜索', icon: Search },
 ]
 
 const reviewerItems = [{ to: '/audit', label: '审核工作台', icon: ClipboardCheck }]

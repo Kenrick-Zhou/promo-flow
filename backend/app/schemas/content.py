@@ -65,6 +65,7 @@ class ContentOut(BaseModel):
     ai_error: str | None
     ai_processed_at: str | None
     uploaded_by: int
+    uploaded_by_name: str
     category_id: int | None
     category_name: str | None
     primary_category_name: str | None
@@ -90,6 +91,7 @@ class ContentOut(BaseModel):
             ai_error=output.ai_error,
             ai_processed_at=output.ai_processed_at,
             uploaded_by=output.uploaded_by,
+            uploaded_by_name=output.uploaded_by_name,
             category_id=output.category_id,
             category_name=output.category_name,
             primary_category_name=output.primary_category_name,
