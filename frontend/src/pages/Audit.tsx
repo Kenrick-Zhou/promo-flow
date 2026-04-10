@@ -93,7 +93,7 @@ export default function Audit() {
 
     const timer = window.setInterval(() => {
       void refreshPending()
-    }, 5000)
+    }, 10000)
 
     return () => window.clearInterval(timer)
   }, [editingId, refreshPending])
