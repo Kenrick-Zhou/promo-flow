@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { RefreshCw } from 'lucide-react'
+import MediaPreview from '@/components/ui/MediaPreview'
 import { useAudit } from '@/hooks/useAudit'
-import type { Content, ContentListOut } from '@/types'
+import type { Content, ContentListOut, ContentType } from '@/types'
+import { getThumbnailUrl } from '@/utils/oss'
 
 export default function Audit() {
   const { listPending, submitAudit, editMetadata } = useAudit()
@@ -13,6 +15,8 @@ export default function Audit() {
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [refreshError, setRefreshError] = useState<string | null>(null)
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [previewType, setPreviewType] = useState<ContentType>('image')
   const hasLoadedOnceRef = useRef(false)
   const fingerprintRef = useRef('')
   const requestInFlightRef = useRef(false)
@@ -26,6 +30,7 @@ export default function Audit() {
         status: item.status,
         title: item.title,
         description: item.description,
+        file_url: item.file_url,
         ai_summary: item.ai_summary,
         ai_keywords: item.ai_keywords,
         ai_status: item.ai_status,
@@ -123,6 +128,13 @@ export default function Audit() {
     setEditingId(null)
   }
 
+  function openPreview(item: Content) {
+    if (item.file_url && item.content_type !== 'document') {
+      setPreviewUrl(item.file_url)
+      setPreviewType(item.content_type)
+    }
+  }
+
   const aiStatusLabel: Record<string, { text: string; className: string }> = {
     pending: { text: 'AI 待处理', className: 'bg-gray-100 text-gray-600' },
     processing: { text: 'AI 分析中', className: 'bg-blue-100 text-blue-700' },
@@ -163,111 +175,154 @@ export default function Audit() {
           return (
             <article
               key={item.id}
-              className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm transition hover:shadow-md dark:border-gray-700 dark:bg-gray-800"
+              className="rounded-xl border border-gray-200 bg-white shadow-sm transition hover:shadow-md dark:border-gray-700 dark:bg-gray-800"
             >
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 min-w-0">
-                    {aiBadge && (
-                      <span
-                        className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${aiBadge.className}`}
+              <div className="flex">
+                {/* Thumbnail */}
+                {(() => {
+                  const thumbUrl = getThumbnailUrl(item.file_url, item.content_type, 300, 300)
+                  if (thumbUrl) {
+                    return (
+                      <button
+                        type="button"
+                        onClick={() => openPreview(item)}
+                        className="relative shrink-0 w-36 overflow-hidden rounded-l-xl bg-gray-100 dark:bg-gray-700"
+                        aria-label="预览媒体"
                       >
-                        {aiBadge.text}
-                      </span>
-                    )}
-                    {isEditing ? (
-                      <input
-                        type="text"
-                        value={editTitle}
-                        onChange={(e) => setEditTitle(e.target.value)}
-                        className="min-w-0 flex-1 rounded-md border border-gray-300 px-2 py-1 text-sm font-semibold text-gray-900 focus:border-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                      />
-                    ) : (
-                      <h3 className="min-w-0 font-semibold text-gray-900 dark:text-white">
-                        {item.title ?? '待AI生成'}
-                      </h3>
-                    )}
-                  </div>
-                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                    {item.description}
-                  </p>
-                  <div className="mt-2 flex flex-wrap items-center gap-1">
-                    {item.tags.map((t) => (
-                      <span
-                        key={t}
-                        className="inline-flex items-center rounded-md bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600 dark:bg-gray-700 dark:text-gray-300"
-                      >
-                        {t}
-                      </span>
-                    ))}
-                  </div>
-                  {item.ai_keywords.length > 0 && (
-                    <div className="mt-2 flex flex-wrap gap-1">
-                      <span className="text-xs text-gray-400 dark:text-gray-500">AI 关键词：</span>
-                      {item.ai_keywords.map((kw) => (
+                        <img
+                          src={thumbUrl}
+                          alt={item.title ?? '缩略图'}
+                          className="h-full w-full object-cover"
+                        />
+                        {item.content_type === 'video' && (
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <div className="flex size-10 items-center justify-center rounded-full bg-black/50 text-white">
+                              <svg
+                                className="size-5 ml-0.5"
+                                viewBox="0 0 24 24"
+                                fill="currentColor"
+                              >
+                                <path d="M8 5v14l11-7z" />
+                              </svg>
+                            </div>
+                          </div>
+                        )}
+                      </button>
+                    )
+                  }
+                  return (
+                    <div className="flex w-36 shrink-0 items-center justify-center rounded-l-xl bg-gray-100 dark:bg-gray-700">
+                      <span className="text-3xl">📄</span>
+                    </div>
+                  )
+                })()}
+
+                <div className="flex flex-1 items-start justify-between gap-4 p-5 min-w-0">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 min-w-0">
+                      {aiBadge && (
                         <span
-                          key={kw}
-                          className="inline-flex items-center rounded-md bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-600 dark:bg-blue-900/30 dark:text-blue-300"
+                          className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${aiBadge.className}`}
                         >
-                          {kw}
+                          {aiBadge.text}
+                        </span>
+                      )}
+                      {isEditing ? (
+                        <input
+                          type="text"
+                          value={editTitle}
+                          onChange={(e) => setEditTitle(e.target.value)}
+                          className="min-w-0 flex-1 rounded-md border border-gray-300 px-2 py-1 text-sm font-semibold text-gray-900 focus:border-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                        />
+                      ) : (
+                        <h3 className="min-w-0 font-semibold text-gray-900 dark:text-white">
+                          {item.title ?? '待AI生成'}
+                        </h3>
+                      )}
+                    </div>
+                    <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                      {item.description}
+                    </p>
+                    <div className="mt-2 flex flex-wrap items-center gap-1">
+                      {item.tags.map((t) => (
+                        <span
+                          key={t}
+                          className="inline-flex items-center rounded-md bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600 dark:bg-gray-700 dark:text-gray-300"
+                        >
+                          {t}
                         </span>
                       ))}
                     </div>
-                  )}
-                  {isEditing ? (
-                    <textarea
-                      value={editSummary}
-                      onChange={(e) => setEditSummary(e.target.value)}
-                      rows={2}
-                      className="mt-2 w-full rounded-md border border-gray-300 px-2 py-1 text-xs text-gray-600 focus:border-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300"
-                    />
-                  ) : (
-                    item.ai_summary && (
-                      <p className="mt-2 text-xs italic text-gray-400 dark:text-gray-500">
-                        AI 摘要：{item.ai_summary}
-                      </p>
-                    )
-                  )}
-                  {item.ai_error && <p className="mt-1 text-xs text-red-500">{item.ai_error}</p>}
-                </div>
-                <div className="flex flex-col gap-2 shrink-0">
-                  {isEditing ? (
-                    <>
-                      <button
-                        onClick={() => saveEdit(item.id)}
-                        className="inline-flex items-center rounded-lg bg-blue-500 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 dark:focus:ring-offset-gray-800"
-                      >
-                        保存
-                      </button>
-                      <button
-                        onClick={cancelEdit}
-                        className="inline-flex items-center rounded-lg bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 dark:bg-gray-600 dark:text-gray-200 dark:hover:bg-gray-500 dark:focus:ring-offset-gray-800"
-                      >
-                        取消
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <button
-                        onClick={() => startEdit(item)}
-                        className="inline-flex items-center rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium text-gray-600 shadow-sm transition hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 dark:focus:ring-offset-gray-800"
-                      >
-                        编辑
-                      </button>
-                      <button
-                        onClick={() => handleAudit(item.id, 'approved')}
-                        className="inline-flex items-center rounded-lg bg-green-500 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-offset-2 dark:focus:ring-offset-gray-800"
-                      >
-                        通过
-                      </button>
-                      <button
-                        onClick={() => handleAudit(item.id, 'rejected')}
-                        className="inline-flex items-center rounded-lg bg-red-500 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-offset-2 dark:focus:ring-offset-gray-800"
-                      >
-                        驳回
-                      </button>
-                    </>
-                  )}
+                    {item.ai_keywords.length > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-1">
+                        <span className="text-xs text-gray-400 dark:text-gray-500">
+                          AI 关键词：
+                        </span>
+                        {item.ai_keywords.map((kw) => (
+                          <span
+                            key={kw}
+                            className="inline-flex items-center rounded-md bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-600 dark:bg-blue-900/30 dark:text-blue-300"
+                          >
+                            {kw}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    {isEditing ? (
+                      <textarea
+                        value={editSummary}
+                        onChange={(e) => setEditSummary(e.target.value)}
+                        rows={2}
+                        className="mt-2 w-full rounded-md border border-gray-300 px-2 py-1 text-xs text-gray-600 focus:border-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300"
+                      />
+                    ) : (
+                      item.ai_summary && (
+                        <p className="mt-2 text-xs italic text-gray-400 dark:text-gray-500">
+                          AI 摘要：{item.ai_summary}
+                        </p>
+                      )
+                    )}
+                    {item.ai_error && <p className="mt-1 text-xs text-red-500">{item.ai_error}</p>}
+                  </div>
+                  <div className="flex flex-col gap-2 shrink-0">
+                    {isEditing ? (
+                      <>
+                        <button
+                          onClick={() => saveEdit(item.id)}
+                          className="inline-flex items-center rounded-lg bg-blue-500 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 dark:focus:ring-offset-gray-800"
+                        >
+                          保存
+                        </button>
+                        <button
+                          onClick={cancelEdit}
+                          className="inline-flex items-center rounded-lg bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 dark:bg-gray-600 dark:text-gray-200 dark:hover:bg-gray-500 dark:focus:ring-offset-gray-800"
+                        >
+                          取消
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => startEdit(item)}
+                          className="inline-flex items-center rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium text-gray-600 shadow-sm transition hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 dark:focus:ring-offset-gray-800"
+                        >
+                          编辑
+                        </button>
+                        <button
+                          onClick={() => handleAudit(item.id, 'approved')}
+                          className="inline-flex items-center rounded-lg bg-green-500 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-offset-2 dark:focus:ring-offset-gray-800"
+                        >
+                          通过
+                        </button>
+                        <button
+                          onClick={() => handleAudit(item.id, 'rejected')}
+                          className="inline-flex items-center rounded-lg bg-red-500 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-offset-2 dark:focus:ring-offset-gray-800"
+                        >
+                          驳回
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
             </article>
@@ -281,6 +336,14 @@ export default function Audit() {
           </div>
         )}
       </div>
+
+      {previewUrl && (
+        <MediaPreview
+          fileUrl={previewUrl}
+          contentType={previewType}
+          onClose={() => setPreviewUrl(null)}
+        />
+      )}
     </div>
   )
 }

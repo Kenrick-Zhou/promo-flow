@@ -1,4 +1,5 @@
 import type { Content } from '@/types'
+import { getThumbnailUrl } from '@/utils/oss'
 
 interface Props {
   content: Content
@@ -31,15 +32,30 @@ export default function ContentCard({ content, onClick }: Props) {
     >
       {/* Thumbnail */}
       <div className="flex h-40 w-full items-center justify-center overflow-hidden bg-gray-100 dark:bg-gray-700">
-        {content.content_type === 'image' && content.file_url ? (
-          <img
-            src={content.file_url}
-            alt={title}
-            className="h-full w-full object-cover transition-transform group-hover:scale-105"
-          />
-        ) : (
-          <span className="text-4xl">{content.content_type === 'video' ? '🎬' : '📄'}</span>
-        )}
+        {(() => {
+          const thumbUrl = getThumbnailUrl(content.file_url, content.content_type, 400, 400)
+          if (thumbUrl) {
+            return (
+              <div className="relative h-full w-full">
+                <img
+                  src={thumbUrl}
+                  alt={title}
+                  className="h-full w-full object-cover transition-transform group-hover:scale-105"
+                />
+                {content.content_type === 'video' && (
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="flex size-10 items-center justify-center rounded-full bg-black/50 text-white">
+                      <svg className="size-5 ml-0.5" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M8 5v14l11-7z" />
+                      </svg>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )
+          }
+          return <span className="text-4xl">📄</span>
+        })()}
       </div>
 
       <div className="p-4">

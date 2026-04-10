@@ -31,6 +31,7 @@ from app.services.content.errors import (
     InvalidAuditActionError,
     InvalidCategoryError,
 )
+from app.services.infrastructure.storage import get_public_url
 
 # Eager-loading options for Content queries
 _CONTENT_LOAD_OPTIONS = [
@@ -50,7 +51,7 @@ def _content_to_output(content: Content) -> ContentOutput:
         content_type=ContentType(content.content_type),
         status=ContentStatus(content.status),
         file_key=content.file_key,
-        file_url=content.file_url,
+        file_url=content.file_url or get_public_url(content.file_key),
         file_size=content.file_size,
         ai_summary=content.ai_summary,
         ai_keywords=content.ai_keywords or [],
@@ -118,6 +119,7 @@ async def create_content(
         description=command.description,
         content_type=command.content_type,
         file_key=command.file_key,
+        file_url=get_public_url(command.file_key),
         uploaded_by=command.uploaded_by,
         category_id=command.category_id,
     )
