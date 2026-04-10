@@ -4,24 +4,15 @@ import { useSearch } from '@/hooks/useSearch'
 import type { SearchResultItem } from '@/types'
 
 export default function Search() {
-  const { loading, semanticSearch, ragQuery } = useSearch()
+  const { loading, semanticSearch } = useSearch()
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<SearchResultItem[]>([])
-  const [answer, setAnswer] = useState<string | null>(null)
-  const [mode, setMode] = useState<'search' | 'rag'>('search')
 
   async function handleSearch(e: React.FormEvent) {
     e.preventDefault()
     if (!query.trim()) return
-    setAnswer(null)
-    if (mode === 'rag') {
-      const result = await ragQuery(query)
-      setResults(result.sources)
-      setAnswer(result.answer)
-    } else {
-      const data = await semanticSearch(query)
-      setResults(data)
-    }
+    const data = await semanticSearch(query)
+    setResults(data)
   }
 
   return (
@@ -35,23 +26,6 @@ export default function Search() {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
-        {/* 搜索模式切换：分段控件，对齐 HyperUI Tabs 模式 */}
-        <div className="flex gap-1 rounded-lg bg-gray-100 p-1 dark:bg-gray-700">
-          {(['search', 'rag'] as const).map((m) => (
-            <button
-              key={m}
-              type="button"
-              onClick={() => setMode(m)}
-              className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${
-                mode === m
-                  ? 'bg-white text-purple-700 shadow-sm dark:bg-gray-800 dark:text-purple-300'
-                  : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200'
-              }`}
-            >
-              {m === 'search' ? '语义检索' : 'AI 问答'}
-            </button>
-          ))}
-        </div>
         <button
           type="submit"
           disabled={loading}
@@ -60,13 +34,6 @@ export default function Search() {
           {loading ? '搜索中...' : '搜索'}
         </button>
       </form>
-
-      {answer && (
-        <div className="rounded-xl border border-purple-200 bg-purple-50 p-4 mb-6 dark:border-purple-800 dark:bg-purple-900/20">
-          <p className="text-sm font-semibold text-purple-700 mb-1 dark:text-purple-300">AI 回答</p>
-          <p className="text-sm leading-relaxed text-gray-800 dark:text-gray-200">{answer}</p>
-        </div>
-      )}
 
       <ContentGrid items={results.map((r) => r.content)} />
     </div>

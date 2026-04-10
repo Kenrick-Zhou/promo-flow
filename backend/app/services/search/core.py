@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from sqlalchemy import select, text
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -60,28 +60,21 @@ async def semantic_search(
     Returns list of SearchResultOutput sorted by relevance.
     Only searches approved content.
     """
-    vector_literal = f"[{','.join(str(v) for v in query_embedding)}]"
+    distance = Content.embedding.cosine_distance(query_embedding)
 
-    # Use parameterized query for content_type filter
-    base_filters = "status = 'approved' AND embedding IS NOT NULL"
-    params: dict = {"embedding": vector_literal, "limit": command.limit}
-
-    if command.content_type:
-        base_filters += " AND content_type = :content_type"
-        params["content_type"] = command.content_type
-
-    stmt = text(
-        f"""
-        SELECT id, 1 - (embedding <=> :embedding::vector) AS score
-        FROM contents
-        WHERE {base_filters}
-        ORDER BY embedding <=> :embedding::vector
-        LIMIT :limit
-    """
+    stmt = (
+        select(Content.id, (1 - distance).label("score"))
+        .where(Content.status == ContentStatus.approved)
+        .where(Content.embedding.isnot(None))
+        .order_by(distance)
+        .limit(command.limit)
     )
 
-    result = await db.execute(stmt, params)
-    rows = result.fetchall()
+    if command.content_type:
+        stmt = stmt.where(Content.content_type == command.content_type)
+
+    result = await db.execute(stmt)
+    rows = result.all()
 
     if not rows:
         return []
