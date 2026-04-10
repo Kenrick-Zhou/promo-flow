@@ -14,7 +14,7 @@ export interface TokenOut {
 }
 
 export type ContentStatus = 'pending' | 'approved' | 'rejected'
-export type ContentType = 'image' | 'video' | 'document'
+export type ContentType = 'image' | 'video'
 export type AiStatus = 'pending' | 'processing' | 'completed' | 'failed'
 
 export interface Content {

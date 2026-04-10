@@ -189,6 +189,30 @@ async def test_create_content_with_primary_category_rejected(
 
 
 @pytest.mark.asyncio
+async def test_create_content_rejects_document_content_type(
+    employee_client: AsyncClient,
+    secondary_category: Category,
+):
+    resp = await employee_client.post(
+        "/api/v1/contents",
+        json={
+            "description": "测试描述",
+            "tag_names": [],
+            "content_type": "document",
+            "file_key": _n("invalid-document.bin"),
+            "category_id": secondary_category.id,
+        },
+    )
+
+    assert resp.status_code == 422
+    data = resp.json()
+    assert data["error_code"] == "validation_error"
+    assert data["message"] == "Validation failed"
+    assert data["request_id"]
+    assert resp.headers["X-Request-ID"] == data["request_id"]
+
+
+@pytest.mark.asyncio
 async def test_run_ai_analysis_uses_context_and_generates_title_after_analysis(
     db: AsyncSession,
     engine: AsyncEngine,

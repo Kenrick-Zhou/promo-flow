@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react'
 import api from '@/services/api'
-import type { Content, ContentListOut } from '@/types'
+import type { Content, ContentListOut, ContentStatus } from '@/types'
 
 interface AuditDecision {
   status: 'approved' | 'rejected'
@@ -12,7 +12,7 @@ interface MetadataEdit {
   ai_summary?: string
 }
 
-interface ListPendingOptions {
+interface ListAuditItemsOptions {
   silent?: boolean
 }
 
@@ -20,8 +20,8 @@ export function useAudit() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const listPending = useCallback(
-    async (options: ListPendingOptions = {}): Promise<ContentListOut> => {
+  const listAuditItems = useCallback(
+    async (status: ContentStatus, options: ListAuditItemsOptions = {}): Promise<ContentListOut> => {
       const { silent = false } = options
 
       if (!silent) {
@@ -30,7 +30,9 @@ export function useAudit() {
       }
 
       try {
-        const { data } = await api.get<ContentListOut>('/audit/pending')
+        const { data } = await api.get<ContentListOut>('/contents', {
+          params: { status },
+        })
         return data
       } catch (e: unknown) {
         if (!silent) {
@@ -55,5 +57,5 @@ export function useAudit() {
     return data
   }, [])
 
-  return { loading, error, listPending, submitAudit, editMetadata }
+  return { loading, error, listAuditItems, submitAudit, editMetadata }
 }

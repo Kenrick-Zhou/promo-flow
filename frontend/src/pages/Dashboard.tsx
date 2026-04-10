@@ -10,7 +10,6 @@ const typeOptions: { value: ContentType | ''; label: string }[] = [
   { value: '', label: '全部' },
   { value: 'image', label: '图片' },
   { value: 'video', label: '视频' },
-  { value: 'document', label: '文档' },
 ]
 
 export default function Dashboard() {

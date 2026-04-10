@@ -23,7 +23,6 @@ class ContentType(str, enum.Enum):
 
     image = "image"
     video = "video"
-    document = "document"
 
 
 class UserRole(str, enum.Enum):

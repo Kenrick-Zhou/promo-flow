@@ -68,8 +68,8 @@ export default function ContentDetail({ content, onClose }: Props) {
           />
         ) : (
           <div className="flex flex-col items-center gap-4 text-gray-400">
-            <span className="text-8xl">📄</span>
-            <p className="text-sm">文档暂不支持预览</p>
+            <span className="text-8xl">🖼️</span>
+            <p className="text-sm">当前素材暂无可预览内容</p>
           </div>
         )}
       </div>

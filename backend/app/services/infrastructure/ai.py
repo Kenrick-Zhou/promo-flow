@@ -31,7 +31,6 @@ _JSON_MODE_RESPONSE_FORMAT = {"type": "json_object"}
 _CONTENT_TYPE_LABELS = {
     "image": "图片",
     "video": "视频",
-    "document": "文档",
 }
 
 
