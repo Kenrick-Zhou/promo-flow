@@ -70,5 +70,22 @@ export function useContent() {
     [],
   )
 
-  return { loading, error, listContents, getPresignedUrl, createContent, uploadToPresignedUrl }
+  const recordView = useCallback(async (contentId: number): Promise<void> => {
+    await api.post(`/contents/${contentId}/view`)
+  }, [])
+
+  const recordDownload = useCallback(async (contentId: number): Promise<void> => {
+    await api.post(`/contents/${contentId}/download`)
+  }, [])
+
+  return {
+    loading,
+    error,
+    listContents,
+    getPresignedUrl,
+    createContent,
+    uploadToPresignedUrl,
+    recordView,
+    recordDownload,
+  }
 }

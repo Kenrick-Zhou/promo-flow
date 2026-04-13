@@ -43,6 +43,10 @@ class Content(Base):
     media_width: Mapped[int | None] = mapped_column(Integer, nullable=True)
     media_height: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
+    # Counters
+    view_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    download_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
     # AI generated fields
     ai_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     ai_keywords: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)

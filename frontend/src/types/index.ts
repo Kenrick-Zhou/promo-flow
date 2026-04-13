@@ -29,6 +29,8 @@ export interface Content {
   file_size: number | null
   media_width: number | null
   media_height: number | null
+  view_count: number
+  download_count: number
   ai_summary: string | null
   ai_keywords: string[]
   ai_status: AiStatus

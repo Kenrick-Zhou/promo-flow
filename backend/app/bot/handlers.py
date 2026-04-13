@@ -2,25 +2,7 @@
 
 from __future__ import annotations
 
-import httpx
-
-from app.services.auth import get_feishu_app_token
-
-
-async def _send_feishu_message(chat_id: str, text: str) -> None:
-    """Send a text message to a Feishu group chat."""
-    token = await get_feishu_app_token()
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        await client.post(
-            "https://open.feishu.cn/open-apis/im/v1/messages",
-            headers={"Authorization": f"Bearer {token}"},
-            params={"receive_id_type": "chat_id"},
-            json={
-                "receive_id": chat_id,
-                "msg_type": "text",
-                "content": f'{{"text": "{text}"}}',
-            },
-        )
+from app.services.infrastructure.feishu import send_text_to_chat
 
 
 async def notify_content_approved(content_id: int) -> None:
@@ -66,7 +48,7 @@ async def handle_message_event(event: dict) -> None:
         results = await semantic_search(db, query_embedding=embedding, command=command)
 
     if not results:
-        await _send_feishu_message(chat_id, "暂未找到相关素材，请尝试其他关键词。")
+        await send_text_to_chat(chat_id, "暂未找到相关素材，请尝试其他关键词。")
         return
 
     context_docs = [
@@ -77,4 +59,4 @@ async def handle_message_event(event: dict) -> None:
         for r in results
     ]
     answer = await generate_rag_response(text, context_docs)
-    await _send_feishu_message(chat_id, answer)
+    await send_text_to_chat(chat_id, answer)

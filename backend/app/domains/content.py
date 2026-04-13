@@ -125,6 +125,8 @@ class ContentOutput:
     file_size: int | None
     media_width: int | None
     media_height: int | None
+    view_count: int
+    download_count: int
     ai_summary: str | None
     ai_keywords: list[str]
     ai_status: AiStatus

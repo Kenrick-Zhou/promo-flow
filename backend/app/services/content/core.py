@@ -56,6 +56,8 @@ def _content_to_output(content: Content) -> ContentOutput:
         file_size=content.file_size,
         media_width=content.media_width,
         media_height=content.media_height,
+        view_count=content.view_count,
+        download_count=content.download_count,
         ai_summary=content.ai_summary,
         ai_keywords=content.ai_keywords or [],
         ai_status=AiStatus(content.ai_status),
@@ -371,3 +373,94 @@ async def edit_content_metadata(
         content.ai_summary = command.ai_summary
     await db.commit()
     return await get_content(db, command.content_id)
+
+
+async def increment_view_count(db: AsyncSession, content_id: int) -> None:
+    """Increment view count by 1."""
+    content = await db.get(Content, content_id)
+    if content is None:
+        raise ContentNotFoundError(content_id=content_id)
+    content.view_count = content.view_count + 1
+    await db.commit()
+
+
+async def increment_download_count(db: AsyncSession, content_id: int) -> None:
+    """Increment download count by 1."""
+    content = await db.get(Content, content_id)
+    if content is None:
+        raise ContentNotFoundError(content_id=content_id)
+    content.download_count = content.download_count + 1
+    await db.commit()
+
+
+async def send_file_to_user(
+    content_id: int,
+    *,
+    feishu_open_id: str,
+) -> None:
+    """Stream file from OSS into a SpooledTemporaryFile then DM via Feishu bot.
+
+    SpooledTemporaryFile buffers up to 10 MB in memory; larger files spill to
+    disk automatically.  The result is always seekable, satisfying the
+    requests_toolbelt MultipartEncoder requirement.
+    """
+    import asyncio
+    import logging
+    import tempfile
+
+    import httpx
+
+    from app.db.session import AsyncSessionLocal
+    from app.services.infrastructure.feishu import (
+        send_file_to_user_sync as _feishu_send_file_sync,
+    )
+    from app.services.infrastructure.feishu import (
+        send_image_to_user_sync as _feishu_send_image_sync,
+    )
+
+    logger = logging.getLogger("promoflow.api")
+    logger.info(
+        "send_file_to_user start: content=%s open_id=%s", content_id, feishu_open_id
+    )
+
+    def _stream_oss_to_feishu(
+        file_url: str,
+        open_id: str,
+        file_name: str,
+        is_image: bool,
+    ) -> None:
+        """Sync: stream OSS → seekable SpooledTemporaryFile → Feishu SDK."""
+        with httpx.Client(timeout=120.0) as http:
+            with http.stream("GET", file_url) as resp:
+                resp.raise_for_status()
+                logger.info(
+                    "OSS stream open: status=%s content-length=%s",
+                    resp.status_code,
+                    resp.headers.get("content-length", "unknown"),
+                )
+                # SpooledTemporaryFile: ≤10 MB stays in RAM, larger spills to disk.
+                # Always seekable — satisfies requests_toolbelt MultipartEncoder.
+                with tempfile.SpooledTemporaryFile(max_size=10 * 1024 * 1024) as tmp:
+                    for chunk in resp.iter_bytes(65536):
+                        tmp.write(chunk)
+                    tmp.seek(0)
+                    if is_image:
+                        _feishu_send_image_sync(open_id, tmp, file_name)
+                    else:
+                        _feishu_send_file_sync(open_id, tmp, file_name)
+
+    try:
+        async with AsyncSessionLocal() as db:
+            content = await get_content_orm(db, content_id)
+
+        file_url = content.file_url or get_public_url(content.file_key)
+        file_name = content.file_key.rsplit("/", 1)[-1]
+        is_image = content.content_type == ContentType.image
+
+        await asyncio.to_thread(
+            _stream_oss_to_feishu, file_url, feishu_open_id, file_name, is_image
+        )
+    except Exception:
+        logger.exception(
+            "Failed to send file to user %s for content %s", feishu_open_id, content_id
+        )

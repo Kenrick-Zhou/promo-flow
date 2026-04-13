@@ -13,7 +13,7 @@ const typeOptions: { value: ContentType | ''; label: string }[] = [
 ]
 
 export default function Dashboard() {
-  const { listContents, loading } = useContent()
+  const { listContents, loading, recordView, recordDownload } = useContent()
   const { semanticSearch, loading: searchLoading } = useSearch()
   const [items, setItems] = useState<Content[]>([])
   const [total, setTotal] = useState(0)
@@ -45,6 +45,24 @@ export default function Dashboard() {
   function handleClearSearch() {
     setQuery('')
     setIsSearchMode(false)
+  }
+
+  function handleSelectContent(content: Content) {
+    setSelectedContent(content)
+    recordView(content.id).then(() => {
+      // Update local view count optimistically
+      setItems((prev) =>
+        prev.map((c) => (c.id === content.id ? { ...c, view_count: c.view_count + 1 } : c)),
+      )
+    })
+  }
+
+  function handleDownload(content: Content) {
+    recordDownload(content.id).then(() => {
+      setItems((prev) =>
+        prev.map((c) => (c.id === content.id ? { ...c, download_count: c.download_count + 1 } : c)),
+      )
+    })
   }
 
   const isLoading = loading || searchLoading
@@ -111,7 +129,7 @@ export default function Dashboard() {
       {isLoading ? (
         <LoadingDots label="素材广场加载中…" />
       ) : (
-        <MasonryGrid items={items} onSelect={(c) => setSelectedContent(c)} />
+        <MasonryGrid items={items} onSelect={handleSelectContent} onDownload={handleDownload} />
       )}
 
       {selectedContent && (

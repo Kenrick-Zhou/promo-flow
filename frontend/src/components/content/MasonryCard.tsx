@@ -1,15 +1,17 @@
 import { useState } from 'react'
+import { Download, Eye } from 'lucide-react'
 import type { Content } from '@/types'
 import { getThumbnailUrl } from '@/utils/oss'
 
 interface Props {
   content: Content
   onClick?: () => void
+  onDownload?: (content: Content) => void
 }
 
 const DEFAULT_ASPECT = 4 / 3
 
-export default function MasonryCard({ content, onClick }: Props) {
+export default function MasonryCard({ content, onClick, onDownload }: Props) {
   const [imgFailed, setImgFailed] = useState(false)
 
   const aiStatusText: Record<string, string> = {
@@ -85,7 +87,32 @@ export default function MasonryCard({ content, onClick }: Props) {
           ))}
         </div>
 
-        <p className="text-xs text-gray-400 dark:text-gray-500">— by {content.uploaded_by_name}</p>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3 text-xs text-gray-400 dark:text-gray-500">
+            <span className="inline-flex items-center gap-1">
+              <Eye className="size-3.5" />
+              {content.view_count}
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <Download className="size-3.5" />
+              {content.download_count}
+            </span>
+          </div>
+
+          {onDownload && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                onDownload(content)
+              }}
+              className="inline-flex items-center gap-1 rounded-md bg-purple-50 px-2 py-1 text-xs font-medium text-purple-600 transition hover:bg-purple-100 dark:bg-purple-900/30 dark:text-purple-300 dark:hover:bg-purple-900/50"
+            >
+              <Download className="size-3.5" />
+              下载
+            </button>
+          )}
+        </div>
       </div>
     </article>
   )

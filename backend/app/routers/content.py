@@ -29,8 +29,11 @@ from app.services.content import (
     create_content,
     delete_content,
     get_content,
+    increment_download_count,
+    increment_view_count,
     list_contents,
     raise_content_error,
+    send_file_to_user,
     update_content,
 )
 from app.services.infrastructure.storage import (
@@ -178,6 +181,36 @@ async def delete_content_route(
     except (ContentNotFoundError, ContentForbiddenError) as exc:
         raise_content_error(exc)
     await delete_object(file_key)
+
+
+@router.post("/{content_id}/view", status_code=status.HTTP_204_NO_CONTENT)
+async def record_view_route(
+    content_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Record a content view (simple counter, no dedup)."""
+    try:
+        await increment_view_count(db, content_id)
+    except ContentNotFoundError as exc:
+        raise_content_error(exc)
+
+
+@router.post("/{content_id}/download", status_code=status.HTTP_204_NO_CONTENT)
+async def record_download_route(
+    content_id: int,
+    background_tasks: BackgroundTasks,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Record a download and send the file to user via Feishu bot."""
+    try:
+        await increment_download_count(db, content_id)
+    except ContentNotFoundError as exc:
+        raise_content_error(exc)
+    background_tasks.add_task(
+        send_file_to_user, content_id, feishu_open_id=current_user.feishu_open_id
+    )
 
 
 async def _run_ai_analysis(content_id: int, file_key: str, content_type: str) -> None:

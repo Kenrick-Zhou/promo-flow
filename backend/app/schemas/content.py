@@ -61,6 +61,8 @@ class ContentOut(BaseModel):
     file_size: int | None
     media_width: int | None
     media_height: int | None
+    view_count: int
+    download_count: int
     ai_summary: str | None
     ai_keywords: list[str]
     ai_status: str
@@ -89,6 +91,8 @@ class ContentOut(BaseModel):
             file_size=output.file_size,
             media_width=output.media_width,
             media_height=output.media_height,
+            view_count=output.view_count,
+            download_count=output.download_count,
             ai_summary=output.ai_summary,
             ai_keywords=output.ai_keywords,
             ai_status=output.ai_status.value,
