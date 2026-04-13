@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { GripVertical, Plus, Trash2, X } from 'lucide-react'
+import { ArrowLeft, GripVertical, Plus, Trash2, X } from 'lucide-react'
 import {
   DndContext,
   PointerSensor,
@@ -15,6 +15,7 @@ import {
   useSortable,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
+import { useNavigate } from 'react-router-dom'
 import LoadingDots from '@/components/ui/LoadingDots'
 import api from '@/services/api'
 import { useSystem } from '@/hooks/useSystem'
@@ -35,11 +36,22 @@ const tabs: { key: TabKey; label: string }[] = [
 ]
 
 export default function Admin() {
+  const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState<TabKey>('users')
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-gray-900 mb-6 dark:text-white">管理设置</h1>
+      <div className="mb-6 flex items-center gap-3">
+        <button
+          type="button"
+          onClick={() => navigate('/me')}
+          className="rounded-lg p-1.5 text-gray-600 transition-colors active:bg-gray-100 dark:text-gray-300 dark:active:bg-gray-700"
+          aria-label="返回我的页面"
+        >
+          <ArrowLeft className="size-5" />
+        </button>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">管理设置</h1>
+      </div>
 
       {/* Tabs */}
       <div className="mb-6 flex gap-1 rounded-lg bg-gray-100 p-1 dark:bg-gray-700">

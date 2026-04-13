@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { RefreshCw } from 'lucide-react'
+import { ArrowLeft, RefreshCw } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import MediaPreview from '@/components/ui/MediaPreview'
 import { useAudit } from '@/hooks/useAudit'
 import type { Content, ContentListOut, ContentStatus, ContentType } from '@/types'
@@ -18,6 +19,7 @@ const STATUS_BADGES: Record<ContentStatus, { text: string; className: string }> 
 }
 
 export default function Audit() {
+  const navigate = useNavigate()
   const { listAuditItems, submitAudit, editMetadata } = useAudit()
   const [activeStatus, setActiveStatus] = useState<ContentStatus>('pending')
   const [items, setItems] = useState<Content[]>([])
@@ -190,7 +192,17 @@ export default function Audit() {
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">审核工作台</h1>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => navigate('/me')}
+            className="rounded-lg p-1.5 text-gray-600 transition-colors active:bg-gray-100 dark:text-gray-300 dark:active:bg-gray-700"
+            aria-label="返回我的页面"
+          >
+            <ArrowLeft className="size-5" />
+          </button>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">审核工作台</h1>
+        </div>
         <div className="flex items-center gap-3">
           <button
             type="button"
@@ -202,16 +214,11 @@ export default function Audit() {
               })
             }
             disabled={refreshing}
-            className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-600 transition hover:border-purple-200 hover:text-purple-700 disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:border-purple-500/40 dark:hover:text-purple-300"
+            className="inline-flex items-center rounded-lg border border-gray-200 bg-white p-2 text-gray-600 transition hover:border-purple-200 hover:text-purple-700 disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:border-purple-500/40 dark:hover:text-purple-300"
+            aria-label="刷新审核内容"
           >
             <RefreshCw className={`size-4 ${refreshing ? 'animate-spin' : ''}`} />
-            刷新
           </button>
-          <span
-            className={`rounded-full px-3 py-1 text-sm font-medium ${STATUS_BADGES[activeStatus].className} dark:bg-gray-700/60 dark:text-gray-200`}
-          >
-            {currentTab.label} {total} 个
-          </span>
         </div>
       </div>
 
@@ -234,6 +241,14 @@ export default function Audit() {
             </button>
           )
         })}
+      </div>
+
+      <div className="mb-4">
+        <span
+          className={`inline-flex rounded-full px-3 py-1 text-sm font-medium ${STATUS_BADGES[activeStatus].className} dark:bg-gray-700/60 dark:text-gray-200`}
+        >
+          {currentTab.label} {total} 个
+        </span>
       </div>
 
       {refreshError && (

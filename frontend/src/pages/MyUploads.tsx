@@ -8,8 +8,7 @@ import { useContent } from '@/hooks/useContent'
 import type { Content, ContentStatus } from '@/types'
 import { clsx } from 'clsx'
 
-const STATUS_TABS: Array<{ key: ContentStatus | ''; label: string }> = [
-  { key: '', label: '全部' },
+const STATUS_TABS: Array<{ key: ContentStatus; label: string }> = [
   { key: 'pending', label: '待审核' },
   { key: 'approved', label: '已通过' },
   { key: 'rejected', label: '已拒绝' },
@@ -19,17 +18,15 @@ export default function MyUploads() {
   const navigate = useNavigate()
   const { listContents, loading } = useContent()
   const [items, setItems] = useState<Content[]>([])
-  const [total, setTotal] = useState(0)
-  const [status, setStatus] = useState<ContentStatus | ''>('')
+  const [status, setStatus] = useState<ContentStatus>('pending')
   const [selectedContent, setSelectedContent] = useState<Content | null>(null)
 
   useEffect(() => {
     listContents({
       my_uploads: true,
-      status: status || undefined,
+      status,
     }).then((r) => {
       setItems(r.items)
-      setTotal(r.total)
     })
   }, [status, listContents])
 
@@ -44,9 +41,6 @@ export default function MyUploads() {
           <ArrowLeft className="size-5" />
         </button>
         <h1 className="text-lg font-bold text-gray-900 dark:text-white">我的上传</h1>
-        <span className="ml-auto rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-600 dark:bg-gray-700 dark:text-gray-300">
-          {total}
-        </span>
       </div>
 
       {/* 状态筛选 */}
@@ -54,7 +48,7 @@ export default function MyUploads() {
         {STATUS_TABS.map((tab) => (
           <button
             key={tab.key}
-            onClick={() => setStatus(tab.key as ContentStatus | '')}
+            onClick={() => setStatus(tab.key)}
             className={clsx(
               'flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
               status === tab.key

@@ -10,14 +10,21 @@ from app.core.config import settings
 _auth = oss2.Auth(settings.OSS_ACCESS_KEY_ID, settings.OSS_ACCESS_KEY_SECRET)
 _bucket = oss2.Bucket(_auth, settings.OSS_ENDPOINT, settings.OSS_BUCKET_NAME)
 
+_ENV_DIR: dict[str, str] = {
+    "development": "dev",
+    "production": "prod",
+    "test": "test",
+}
+
 
 def _generate_file_key(filename: str, prefix: str = "uploads") -> str:
     ext = filename.rsplit(".", 1)[-1] if "." in filename else ""
     unique = uuid.uuid4().hex
+    env_dir = _ENV_DIR[settings.APP_ENV]
     return (
-        f"{prefix}/{unique[:2]}/{unique}.{ext}"
+        f"{env_dir}/{prefix}/{unique[:2]}/{unique}.{ext}"
         if ext
-        else f"{prefix}/{unique[:2]}/{unique}"
+        else f"{env_dir}/{prefix}/{unique[:2]}/{unique}"
     )
 
 

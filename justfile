@@ -83,6 +83,14 @@ fe-dev:
 fe-build:
     cd frontend && npm run build
 
+# 构建前端 test 环境包
+fe-build-test:
+    cd frontend && npm run build-test
+
+# 构建前端 dev 环境包（部署到开发服务器）
+fe-build-dev:
+    cd frontend && npm run build-dev
+
 # 前端代码格式化（prettier）
 fe-fmt:
     cd frontend && npm run format

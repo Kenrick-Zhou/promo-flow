@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build-dev":  "tsc -b && vite build --mode development",
+    "build-test": "tsc -b && vite build --mode test",
+    "build":      "tsc -b && vite build --mode production",
     "lint": "eslint .",
     "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\"",
     "format": "prettier --write \"src/**/*.{ts,tsx,css}\"",
