@@ -54,6 +54,8 @@ def _content_to_output(content: Content) -> ContentOutput:
         file_key=content.file_key,
         file_url=content.file_url or get_public_url(content.file_key),
         file_size=content.file_size,
+        media_width=content.media_width,
+        media_height=content.media_height,
         ai_summary=content.ai_summary,
         ai_keywords=content.ai_keywords or [],
         ai_status=AiStatus(content.ai_status),
@@ -301,6 +303,22 @@ async def mark_content_ai_processing(
     if content is None:
         return
     content.ai_status = AiStatus.processing
+    await db.commit()
+
+
+async def update_content_media_dimensions(
+    db: AsyncSession,
+    content_id: int,
+    *,
+    width: int,
+    height: int,
+) -> None:
+    """Update media width/height on content."""
+    content = await db.get(Content, content_id)
+    if content is None:
+        return
+    content.media_width = width
+    content.media_height = height
     await db.commit()
 
 

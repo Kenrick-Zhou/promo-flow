@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
-import ContentGrid from '@/components/content/ContentGrid'
+import MasonryGrid from '@/components/content/MasonryGrid'
 import ContentDetail from '@/components/content/ContentDetail'
 import LoadingDots from '@/components/ui/LoadingDots'
 import { useContent } from '@/hooks/useContent'
@@ -68,7 +68,7 @@ export default function MyUploads() {
           <p>暂无上传内容</p>
         </div>
       ) : (
-        <ContentGrid items={items} onSelect={(c) => setSelectedContent(c)} />
+        <MasonryGrid items={items} onSelect={(c) => setSelectedContent(c)} />
       )}
 
       {selectedContent && (

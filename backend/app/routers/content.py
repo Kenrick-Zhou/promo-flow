@@ -190,12 +190,14 @@ async def _run_ai_analysis(content_id: int, file_key: str, content_type: str) ->
         mark_content_ai_failed,
         mark_content_ai_processing,
         update_content_ai_fields,
+        update_content_media_dimensions,
     )
     from app.services.infrastructure.ai import (
         analyze_content,
         generate_content_title,
         generate_embedding,
     )
+    from app.services.infrastructure.storage import get_media_dimensions
 
     logger = logging.getLogger(__name__)
 
@@ -205,8 +207,16 @@ async def _run_ai_analysis(content_id: int, file_key: str, content_type: str) ->
 
     ai_context = _build_ai_context(content)
 
+    # Extract media dimensions (non-blocking, best-effort)
+    file_url = get_public_url(file_key)
+    dims = await get_media_dimensions(file_url, content_type)
+    if dims:
+        async with AsyncSessionLocal() as db:
+            await update_content_media_dimensions(
+                db, content_id, width=dims[0], height=dims[1]
+            )
+
     try:
-        file_url = get_public_url(file_key)
         result = await analyze_content(file_url, content_type, **ai_context)
         summary = result.get("summary", "")
         keywords = result.get("keywords", [])

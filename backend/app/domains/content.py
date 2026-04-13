@@ -123,6 +123,8 @@ class ContentOutput:
     file_key: str
     file_url: str | None
     file_size: int | None
+    media_width: int | None
+    media_height: int | None
     ai_summary: str | None
     ai_keywords: list[str]
     ai_status: AiStatus

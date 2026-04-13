@@ -59,6 +59,8 @@ class ContentOut(BaseModel):
     file_key: str
     file_url: str | None
     file_size: int | None
+    media_width: int | None
+    media_height: int | None
     ai_summary: str | None
     ai_keywords: list[str]
     ai_status: str
@@ -85,6 +87,8 @@ class ContentOut(BaseModel):
             file_key=output.file_key,
             file_url=output.file_url,
             file_size=output.file_size,
+            media_width=output.media_width,
+            media_height=output.media_height,
             ai_summary=output.ai_summary,
             ai_keywords=output.ai_keywords,
             ai_status=output.ai_status.value,

@@ -31,6 +31,8 @@ def _content_to_output(content: Content) -> ContentOutput:
         file_key=content.file_key,
         file_url=content.file_url,
         file_size=content.file_size,
+        media_width=content.media_width,
+        media_height=content.media_height,
         ai_summary=content.ai_summary,
         ai_keywords=content.ai_keywords or [],
         ai_status=AiStatus(content.ai_status),

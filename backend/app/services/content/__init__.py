@@ -12,6 +12,7 @@ from app.services.content.core import (
     mark_content_ai_processing,
     update_content,
     update_content_ai_fields,
+    update_content_media_dimensions,
 )
 from app.services.content.errors import (
     ContentForbiddenError,
@@ -33,6 +34,7 @@ __all__ = [
     "mark_content_ai_processing",
     "update_content",
     "update_content_ai_fields",
+    "update_content_media_dimensions",
     "ContentForbiddenError",
     "ContentNotFoundError",
     "InvalidAuditActionError",

@@ -40,6 +40,8 @@ class Content(Base):
         String(1024), nullable=True
     )  # public URL if any
     file_size: Mapped[int | None] = mapped_column(Integer, nullable=True)  # bytes
+    media_width: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    media_height: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     # AI generated fields
     ai_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
