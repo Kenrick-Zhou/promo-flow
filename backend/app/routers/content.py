@@ -259,9 +259,33 @@ async def _run_ai_analysis(content_id: int, file_key: str, content_type: str) ->
             summary=summary,
             keywords=keywords,
         )
-        parts = [p for p in [title, summary, " ".join(keywords)] if p]
-        embedding_text = " ".join(parts)
-        embedding = await generate_embedding(embedding_text)
+
+        from app.services.search.document_builder import (
+            build_embedding_text,
+            build_search_document,
+        )
+
+        search_doc = build_search_document(
+            title=title or content.title,
+            description=content.description,
+            tag_names=content.tags,
+            ai_keywords=keywords,
+            ai_summary=summary,
+            category_name=content.category_name,
+            primary_category_name=content.primary_category_name,
+            content_type=content_type,
+        )
+        emb_text = build_embedding_text(
+            title=title or content.title,
+            description=content.description,
+            tag_names=content.tags,
+            ai_keywords=keywords,
+            ai_summary=summary,
+            category_name=content.category_name,
+            primary_category_name=content.primary_category_name,
+            content_type=content_type,
+        )
+        embedding = await generate_embedding(emb_text)
 
         async with AsyncSessionLocal() as db:
             await update_content_ai_fields(
@@ -271,6 +295,8 @@ async def _run_ai_analysis(content_id: int, file_key: str, content_type: str) ->
                 summary=summary,
                 keywords=keywords,
                 embedding=embedding,
+                search_document=search_doc,
+                embedding_text=emb_text,
             )
     except Exception:
         logger.exception("AI analysis failed for content %s", content_id)

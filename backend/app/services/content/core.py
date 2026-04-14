@@ -260,6 +260,8 @@ async def update_content_ai_fields(
     summary: str,
     keywords: list[str],
     embedding: list[float],
+    search_document: str | None = None,
+    embedding_text: str | None = None,
 ) -> None:
     """Update AI-generated fields on content."""
     from datetime import datetime
@@ -275,6 +277,10 @@ async def update_content_ai_fields(
     content.ai_status = AiStatus.completed
     content.ai_error = None
     content.ai_processed_at = datetime.now(UTC)
+    if search_document is not None:
+        content.search_document = search_document
+    if embedding_text is not None:
+        content.embedding_text = embedding_text
     await db.commit()
 
 

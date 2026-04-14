@@ -64,6 +64,43 @@ class Settings(BaseSettings):
     # CORS
     CORS_ORIGINS: list[str] = ["http://localhost:5173", "http://localhost:3000"]
 
+    # ── Search: Query Understanding ──────────────────────────
+    SEARCH_ENABLE_LLM_QUERY_PARSE: bool = False
+    SEARCH_LLM_QUERY_PARSE_MODEL: str = "qwen-turbo"
+    SEARCH_LLM_QUERY_PARSE_TIMEOUT_S: int = 3
+
+    # ── Search: Multi-path Recall ────────────────────────────
+    SEARCH_VECTOR_RECALL_LIMIT: int = 50
+    SEARCH_FTS_RECALL_LIMIT: int = 50
+    SEARCH_TAG_RECALL_LIMIT: int = 30
+    SEARCH_RRF_K: int = 60
+    SEARCH_FTS_BACKEND: str = "ilike"  # "zhparser" | "ilike"
+
+    # ── Search: Business Scoring ─────────────────────────────
+    SEARCH_SCORE_CONTENT_TYPE_MATCH: float = 80
+    SEARCH_SCORE_TAG_EXACT: float = 100
+    SEARCH_SCORE_TAG_PHRASE: float = 85
+    SEARCH_SCORE_AI_KEYWORD_EXACT: float = 70
+    SEARCH_SCORE_AI_KEYWORD_PHRASE: float = 55
+    SEARCH_SCORE_TITLE_EXACT: float = 60
+    SEARCH_SCORE_TITLE_PHRASE: float = 45
+    SEARCH_SCORE_CATEGORY_EXACT: float = 40
+    SEARCH_SCORE_CATEGORY_PHRASE: float = 30
+    SEARCH_SCORE_MUST_TERM_DESC: float = 20
+    SEARCH_SCORE_MUST_TERM_SUMMARY: float = 15
+    SEARCH_SCORE_FTS_MAX: float = 30
+    SEARCH_SCORE_VECTOR_MAX: float = 25
+    SEARCH_SCORE_FRESHNESS_MAX: float = 5
+
+    # ── Search: LLM Rerank ───────────────────────────────────
+    SEARCH_ENABLE_LLM_RERANK: bool = False
+    SEARCH_LLM_RERANK_MODEL: str = "qwen-turbo"
+    SEARCH_LLM_RERANK_TOP_K: int = 10
+    SEARCH_LLM_RERANK_TIMEOUT_S: int = 8
+
+    # ── Search: Observability ────────────────────────────────
+    SEARCH_DEBUG_TIMING: bool = False
+
 
 @lru_cache
 def get_settings() -> Settings:

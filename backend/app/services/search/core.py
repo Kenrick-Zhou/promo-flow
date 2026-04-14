@@ -100,7 +100,12 @@ async def semantic_search(
 
     return [
         SearchResultOutput(
-            content=_content_to_output(contents[row_id]), score=scores[row_id]
+            content=_content_to_output(contents[row_id]),
+            final_score=scores[row_id],
+            lexical_score=0.0,
+            semantic_score=scores[row_id],
+            matched_signals=["vector_match"],
+            reranked=False,
         )
         for row_id in ids
         if row_id in contents

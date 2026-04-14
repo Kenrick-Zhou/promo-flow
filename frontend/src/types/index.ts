@@ -68,7 +68,11 @@ export interface AuditLog {
 
 export interface SearchResultItem {
   content: Content
-  score: number
+  final_score: number
+  lexical_score: number
+  semantic_score: number
+  matched_signals: string[]
+  reranked: boolean
 }
 
 // ============================================================

@@ -89,11 +89,12 @@ class AuditContentCommand:
 
 @dataclass(slots=True)
 class SearchContentCommand:
-    """Command for semantic content search."""
+    """Command for content search."""
 
     query: str
     limit: int = 10
     content_type: str | None = None
+    enable_rerank: bool | None = None
 
 
 @dataclass(slots=True)
@@ -163,10 +164,51 @@ class AuditLogOutput:
 
 @dataclass(slots=True)
 class SearchResultOutput:
-    """Single search result with relevance score."""
+    """Single search result with relevance scores."""
 
     content: ContentOutput
-    score: float
+    final_score: float
+    lexical_score: float
+    semantic_score: float
+    matched_signals: list[str]
+    reranked: bool
+
+
+@dataclass(slots=True)
+class ParsedQuery:
+    """Output of query understanding stage."""
+
+    raw_query: str
+    normalized_query: str
+    parsed_content_type: str | None
+    must_terms: list[str]
+    should_terms: list[str]
+    query_embedding_text: str
+    need_llm_rerank: bool
+    llm_used: bool
+
+
+@dataclass(slots=True)
+class SearchTimingOutput:
+    """Per-stage timing for a search request."""
+
+    query_parse_ms: float
+    vector_recall_ms: float
+    fts_recall_ms: float
+    tag_recall_ms: float
+    rrf_merge_ms: float
+    scoring_ms: float
+    llm_rerank_ms: float | None
+    total_ms: float
+
+
+@dataclass(slots=True)
+class SearchOutput:
+    """Unified search result returned by search_contents()."""
+
+    results: list[SearchResultOutput]
+    timing: SearchTimingOutput | None
+    query_info: ParsedQuery
 
 
 @dataclass(slots=True)

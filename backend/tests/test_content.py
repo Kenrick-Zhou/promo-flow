@@ -266,12 +266,11 @@ async def test_run_ai_analysis_uses_context_and_generates_title_after_analysis(
 
     async def fake_generate_embedding(text: str) -> list[float]:
         events.append("embedding")
-        expected_text = (
-            "胶原蛋白焕亮海报 "
-            "强调胶原蛋白产品卖点与目标人群。 "
-            "胶原蛋白 焕亮 女性营养"
-        )
-        assert text == expected_text
+        # New format: build_embedding_text includes title, description, tags,
+        # ai_keywords, ai_summary, primary_category, category, type_label
+        assert "胶原蛋白焕亮海报" in text
+        assert "强调胶原蛋白产品卖点与目标人群。" in text
+        assert "图片 图像" in text
         return [0.0] * 1024
 
     test_session_maker = async_sessionmaker(engine, expire_on_commit=False)
@@ -319,3 +318,5 @@ async def test_run_ai_analysis_uses_context_and_generates_title_after_analysis(
     assert content.ai_summary == "强调胶原蛋白产品卖点与目标人群。"
     assert content.ai_keywords == ["胶原蛋白", "焕亮", "女性营养"]
     assert content.ai_status.value == "completed"
+    assert content.search_document is not None
+    assert content.embedding_text is not None

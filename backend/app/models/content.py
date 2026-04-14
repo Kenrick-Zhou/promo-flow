@@ -66,6 +66,11 @@ class Content(Base):
         ForeignKey("categories.id"), nullable=True
     )
 
+    # Search document (maintained by service layer for FTS)
+    search_document: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Embedding source text (for debugging / re-generation)
+    embedding_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+
     uploaded_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

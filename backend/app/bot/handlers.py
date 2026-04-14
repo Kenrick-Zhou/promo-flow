@@ -36,18 +36,17 @@ async def handle_message_event(event: dict) -> None:
     if not text:
         return
 
-    # Perform RAG search and reply
+    # Perform unified search and reply
     from app.db.session import AsyncSessionLocal
     from app.domains.content import SearchContentCommand
-    from app.services.infrastructure.ai import generate_embedding, generate_rag_response
-    from app.services.search import semantic_search
+    from app.services.infrastructure.ai import generate_rag_response
+    from app.services.search import search_contents
 
-    embedding = await generate_embedding(text)
-    command = SearchContentCommand(query=text, limit=3)
+    command = SearchContentCommand(query=text, limit=5)
     async with AsyncSessionLocal() as db:
-        results = await semantic_search(db, query_embedding=embedding, command=command)
+        result = await search_contents(db, command=command)
 
-    if not results:
+    if not result.results:
         await send_text_to_chat(chat_id, "暂未找到相关素材，请尝试其他关键词。")
         return
 
@@ -56,7 +55,7 @@ async def handle_message_event(event: dict) -> None:
             f"{_build_context_title(r.content.title)}: "
             f"{r.content.ai_summary or r.content.description or ''}"
         )
-        for r in results
+        for r in result.results
     ]
     answer = await generate_rag_response(text, context_docs)
     await send_text_to_chat(chat_id, answer)

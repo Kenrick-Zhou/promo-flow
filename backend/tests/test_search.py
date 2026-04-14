@@ -81,7 +81,8 @@ async def test_semantic_search_route_returns_results(
         return [0.1] * 1024
 
     monkeypatch.setattr(
-        "app.routers.search.generate_embedding", fake_generate_embedding
+        "app.services.search.core_unified.generate_embedding",
+        fake_generate_embedding,
     )
 
     resp = await employee_client.post(
@@ -91,9 +92,10 @@ async def test_semantic_search_route_returns_results(
 
     assert resp.status_code == 200
     data = resp.json()
-    assert len(data) == 1
-    assert data[0]["content"]["id"] == content.id
-    assert data[0]["content"]["title"] == content.title
+    results = data["results"]
+    assert len(results) >= 1
+    ids = [r["content"]["id"] for r in results]
+    assert content.id in ids
 
 
 @pytest.mark.asyncio
@@ -139,26 +141,28 @@ async def test_semantic_search_orders_by_similarity(
         return [0.9] + [0.1] + [0.0] * 1022
 
     monkeypatch.setattr(
-        "app.routers.search.generate_embedding", fake_embedding_close_to_a
+        "app.services.search.core_unified.generate_embedding",
+        fake_embedding_close_to_a,
     )
     resp1 = await employee_client.post(
         "/api/v1/search", json={"query": "查询A", "limit": 10}
     )
     assert resp1.status_code == 200
-    ids_1 = [r["content"]["id"] for r in resp1.json()]
+    ids_1 = [r["content"]["id"] for r in resp1.json()["results"]]
 
     # Query with embedding close to B → B should rank first
     async def fake_embedding_close_to_b(query: str) -> list[float]:
         return [0.1] + [0.9] + [0.0] * 1022
 
     monkeypatch.setattr(
-        "app.routers.search.generate_embedding", fake_embedding_close_to_b
+        "app.services.search.core_unified.generate_embedding",
+        fake_embedding_close_to_b,
     )
     resp2 = await employee_client.post(
         "/api/v1/search", json={"query": "查询B", "limit": 10}
     )
     assert resp2.status_code == 200
-    ids_2 = [r["content"]["id"] for r in resp2.json()]
+    ids_2 = [r["content"]["id"] for r in resp2.json()["results"]]
 
     # The two queries must produce different orderings
     assert ids_1 != ids_2
