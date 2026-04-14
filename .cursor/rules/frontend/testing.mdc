@@ -1,0 +1,39 @@
+---
+globs: "frontend/src/**/*.test.ts, frontend/src/**/*.test.tsx, frontend/src/**/*.spec.ts, frontend/src/**/*.spec.tsx, frontend/vitest.config.ts"
+---
+## Status
+Testing infrastructure is **not yet set up**. When adding tests, follow these conventions.
+
+## Recommended Setup
+- **Test runner**: Vitest (integrates with Vite natively)
+- **Component testing**: `@testing-library/react` + `@testing-library/jest-dom`
+- **API mocking**: `msw` (Mock Service Worker) for intercepting API calls
+
+## Installation (when ready)
+```bash
+npm install -D vitest @testing-library/react @testing-library/jest-dom @testing-library/user-event jsdom msw
+```
+
+## File Conventions
+- Test files colocated next to source: `ContentCard.test.tsx` beside `ContentCard.tsx`.
+- Or under `__tests__/` directories within each feature folder.
+- File suffix: `.test.ts` / `.test.tsx`.
+
+## Test Categories
+| Category | What to test | Tools |
+|----------|-------------|-------|
+| Unit | Hooks, utility functions, store logic | Vitest + renderHook |
+| Component | Rendering, user interactions, props | Testing Library |
+| Integration | Page-level flows with mocked API | Testing Library + MSW |
+
+## Conventions
+- Use `describe` / `it` blocks.
+- Test behavior, not implementation — assert what the user sees/does.
+- Mock API calls with MSW handlers — don't mock axios directly.
+- Use `userEvent` over `fireEvent` for realistic interaction simulation.
+- Each test must be independent — no shared mutable state between tests.
+
+## Minimum Coverage
+- New hooks: at least one positive and one error case.
+- New components with logic: render test + interaction test.
+- Auth guards: test redirect behavior for authenticated/unauthenticated states.

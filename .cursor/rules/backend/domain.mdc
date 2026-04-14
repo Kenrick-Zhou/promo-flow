@@ -1,0 +1,262 @@
+---
+globs: "backend/app/domains/*.py"
+---
+# Domain Layer Guidelines
+
+This file provides instructions for the `app/domains/` layer.
+
+## Purpose
+
+The domain layer contains **pure business domain types** with **no external dependencies**:
+
+- Enumerations (business-level constants)
+- Value objects (immutable data structures)
+- Command objects (service inputs for write operations)
+- Output/Result objects (service outputs)
+
+## Design Principles
+
+1. **No framework dependency**: Domain layer MUST NOT depend on Pydantic. Use only `dataclass`, `Enum`, `typing`.
+2. **No validation logic**: Assume data is already validated. Validation belongs to Schema layer.
+3. **No serialization concern**: Domain types don't care about JSON serialization. Boundary layers (routers/schemas) handle conversion.
+4. **Immutability for Value Objects**: Use `frozen=True` for value objects that represent immutable concepts.
+
+## Dependency Rules (CRITICAL)
+
+```mermaid
+graph LR
+    routers --> schemas
+    routers --> services
+    routers --> domains
+
+    schemas --> domains
+
+    services --> domains
+    services --> models
+
+    models -.->|enums only| domains
+```
+
+### What domains/ CAN import
+
+- Standard library only: `enum`, `dataclasses`, `typing`, `datetime`
+
+### What domains/ MUST NOT import
+
+- `pydantic` — Never (validation belongs to schema layer)
+- `app.routers.*` — Never
+- `app.schemas.*` — Never
+- `app.services.*` — Never
+- `app.models.*` — Never
+- `app.core.*` — Never (no config, no DB, no logging)
+- Any external HTTP/DB libraries
+
+### Who can import from domains/
+
+- `app.schemas.*` — YES (to reuse domain types in API contracts)
+- `app.services.*` — YES (primary consumer)
+- `app.routers.*` — YES (for type hints)
+- `app.models.*` — **Enumerations only** (to avoid duplicating enum definitions for column types)
+- `app.core.*` — YES for enums (e.g., `UserRole` in `deps.py`)
+
+## File Organization
+
+```
+app/domains/
+├── __init__.py          # Layer documentation
+├── auth.py              # Auth domain types (FeishuLoginCommand, AuthSession, FeishuUserInfo)
+└── content.py           # Content domain types (enums, commands, outputs)
+```
+
+## Type Categories and Naming
+
+### 1. Enumerations
+
+Business-level constants. Use `str, Enum` for JSON serialization compatibility:
+
+```python
+class ContentStatus(str, enum.Enum):
+    """Content review status."""
+    pending = "pending"
+    approved = "approved"
+    rejected = "rejected"
+
+
+class UserRole(str, enum.Enum):
+    """System user roles."""
+    employee = "employee"
+    reviewer = "reviewer"
+    admin = "admin"
+```
+
+### 2. Value Objects (immutable)
+
+Immutable data structures representing domain concepts. Use frozen dataclass:
+
+```python
+@dataclass(slots=True, frozen=True)
+class FeishuUserInfo:
+    """User info fetched from Feishu."""
+    open_id: str
+    union_id: str
+    name: str
+    avatar_url: str | None
+```
+
+### 3. Command Objects (service inputs for write operations)
+
+Input structures for service layer write operations. Use dataclass with `*Command` naming:
+
+```python
+@dataclass(slots=True)
+class FeishuLoginCommand:
+    """Command for Feishu OAuth login."""
+    code: str
+
+
+@dataclass(slots=True)
+class CreateContentCommand:
+    """Command for creating new content."""
+    title: str
+    description: str | None
+    tags: list[str]
+    content_type: ContentType
+    file_key: str
+    uploaded_by: int
+
+
+@dataclass(slots=True)
+class AuditContentCommand:
+    """Command for auditing content."""
+    content_id: int
+    auditor_id: int
+    decision: AuditDecision
+    comments: str | None = None
+```
+
+### 4. Output/Result Objects (service outputs)
+
+Output structures returned by service layer. Use dataclass:
+
+```python
+@dataclass(slots=True)
+class AuthSession:
+    """Issued session after successful authentication."""
+    access_token: str
+    user_id: int
+    user_name: str
+    user_role: str
+    avatar_url: str | None
+    feishu_open_id: str
+    created_at: datetime
+
+
+@dataclass(slots=True)
+class ContentOutput:
+    """Content details returned by service layer."""
+    id: int
+    title: str
+    description: str | None
+    tags: list[str]
+    content_type: ContentType
+    status: ContentStatus
+    # ...
+```
+## Naming Conventions
+
+| Type | Naming Pattern | Example |
+|------|----------------|---------|
+| Write operation input | `*Command` | `FeishuLoginCommand`, `CreateContentCommand` |
+| Read operation input | `*Query` (optional) | `ContentListQuery` — or just pass params directly |
+| Operation result | `*Result` or `*Output` | `AuthSession`, `ContentOutput` |
+| Value object | Direct naming | `FeishuUserInfo`, `PresignedUrlOutput` |
+| Enum | Direct naming | `ContentStatus`, `UserRole`, `AuditDecision` |
+
+## Conversion Pattern
+
+Router layer handles schema ↔ domain conversion:
+
+```python
+# In router
+@router.get("/callback", response_model=TokenOut)
+async def feishu_callback(
+    code: str,
+    db: AsyncSession = Depends(get_db),
+) -> TokenOut:
+    try:
+        session = await login_with_code(
+            db,
+            command=FeishuLoginCommand(code=code),
+        )
+    except FeishuOAuthError as exc:
+        raise_auth_error(exc)
+    return TokenOut.from_domain(session)
+```
+
+## LLM Integration Exception
+
+For LLM JSON response parsing, Pydantic types are allowed **in the infrastructure adapter only** (not domain layer):
+
+```python
+# In app/services/infrastructure/ai.py (private to infrastructure)
+class _AnalysisResponse(BaseModel):
+    """LLM response schema for content analysis. Internal use only."""
+    summary: str = ""
+    keywords: list[str] = Field(default_factory=list)
+```
+
+## Common Mistakes to Avoid
+
+1. **DON'T** use Pydantic BaseModel in domain:
+   ```python
+   # ❌ WRONG
+   class FeishuUserInfo(BaseModel):
+       open_id: str
+
+   # ✅ CORRECT
+   @dataclass(slots=True, frozen=True)
+   class FeishuUserInfo:
+       open_id: str
+   ```
+
+2. **DON'T** import schemas in domain:
+   ```python
+   # ❌ WRONG
+   from app.schemas.content import ContentCreateIn
+   ```
+
+3. **DON'T** import non-enum domain types in models:
+   ```python
+   # ❌ WRONG (in app/models/content.py)
+   from app.domains.content import CreateContentCommand  # dataclass, not enum
+
+   # ✅ OK - enums are allowed to avoid duplication
+   from app.domains.content import ContentStatus  # str, Enum
+   ```
+
+4. **DON'T** return schema types from services:
+   ```python
+   # ❌ WRONG
+   async def create_content(...) -> ContentOut:
+
+   # ✅ CORRECT
+   async def create_content(...) -> ContentOutput:
+   ```
+
+5. **DON'T** accept schema types in services:
+   ```python
+   # ❌ WRONG
+   async def create_content(request: ContentCreateIn, ...):
+
+   # ✅ CORRECT
+   async def create_content(command: CreateContentCommand, ...):
+   ```
+
+6. **DON'T** use `req` as parameter name for commands:
+   ```python
+   # ❌ Inconsistent
+   async def login_with_code(db, req: FeishuLoginCommand, ...):
+
+   # ✅ CORRECT - use 'command' consistently
+   async def login_with_code(db, command: FeishuLoginCommand, ...):
+   ```

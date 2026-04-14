@@ -66,6 +66,47 @@ async def send_text_to_chat(chat_id: str, text: str) -> None:
         logger.error("send_text_to_chat failed: code=%s msg=%s", resp.code, resp.msg)
 
 
+async def send_markdown_to_user(open_id: str, title: str, markdown: str) -> None:
+    """Send a markdown-based interactive card to a user by open_id."""
+    client = get_lark_client()
+    card = {
+        "header": {
+            "template": "blue",
+            "title": {"tag": "plain_text", "content": title},
+        },
+        "elements": [
+            {
+                "tag": "div",
+                "text": {
+                    "tag": "lark_md",
+                    "content": markdown,
+                },
+            }
+        ],
+    }
+    req = (
+        CreateMessageRequest.builder()
+        .receive_id_type("open_id")
+        .request_body(
+            CreateMessageRequestBody.builder()
+            .receive_id(open_id)
+            .msg_type("interactive")
+            .content(json.dumps(card, ensure_ascii=False))
+            .build()
+        )
+        .build()
+    )
+    resp = await client.im.v1.message.acreate(req)
+    if not resp.success():
+        logger.error(
+            "Feishu send markdown to user failed: code=%s msg=%s",
+            resp.code,
+            resp.msg,
+        )
+        raise RuntimeError(f"failed to send markdown message: {resp.code} {resp.msg}")
+    logger.info("Feishu markdown message sent to open_id=%s", open_id)
+
+
 async def send_image_to_user(open_id: str, file_bytes: bytes, file_name: str) -> None:
     """Upload image to Feishu then send to user by open_id."""
     client = get_lark_client()

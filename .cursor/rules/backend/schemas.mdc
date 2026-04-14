@@ -1,0 +1,100 @@
+---
+globs: "backend/app/schemas/*.py"
+---
+## Role
+- Single source of truth for **HTTP API contracts**; control data exposure; decoupled from `models/`.
+- May import from `domains/` to reuse shared types (enums, value objects).
+- **MUST NOT** be imported by `services/`; only `routers/` and `tests/` should use schemas.
+- **Validation belongs here**: All input validation (min/max length, regex, format) is done via `@field_validator` decorators, never in `to_domain()` or domain layer.
+
+## Conversion Methods
+- Request schemas (`XxxIn`) should provide `to_domain()` method to convert to domain Command types.
+- Response schemas (`XxxOut`) should provide `from_domain(cls, output)` class method to construct from domain output.
+- **Critical**: `to_domain()` is a pure data mapper only—no validation, no conditional logic, no exceptions. All validation must be in `@field_validator` decorators before `to_domain()` is called.
+
+### to_domain() Conversion Rules
+
+Request schemas convert to domain Command objects. The `to_domain()` method may accept additional parameters for runtime context:
+
+```python
+class ContentCreateIn(BaseModel):
+    title: str = Field(..., max_length=256)
+    description: str | None = None
+    tags: list[str] = []
+    content_type: ContentType
+    file_key: str
+
+    def to_domain(self, *, uploaded_by: int) -> CreateContentCommand:
+        """Convert HTTP request to domain command (pure mapping only).
+
+        Args:
+            uploaded_by: Current user's ID (injected by router from auth)
+        """
+        return CreateContentCommand(
+            title=self.title,
+            description=self.description,
+            tags=self.tags,
+            content_type=self.content_type,
+            file_key=self.file_key,
+            uploaded_by=uploaded_by,
+        )
+```
+
+### What to Inject via to_domain()
+
+| Category | Inject? | Example |
+|----------|---------|---------|
+| **Business params** | ✅ Always | All fields from request payload |
+| **current_user fields** | ✅ If auth required | `uploaded_by=current_user.id` for content ownership |
+| **Infrastructure deps** | ❌ Never | `db` — pass separately to service |
+
+### from_domain() Pattern
+
+```python
+class TokenOut(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: UserOut
+
+    @classmethod
+    def from_domain(cls, session: AuthSession) -> "TokenOut":
+        """Construct HTTP response from domain output."""
+        return cls(
+            access_token=session.access_token,
+            user=UserOut(
+                id=session.user_id,
+                name=session.user_name,
+                role=session.user_role,
+                avatar_url=session.avatar_url,
+                feishu_open_id=session.feishu_open_id,
+                created_at=session.created_at,
+            ),
+        )
+```
+
+## Naming and Layers
+- `XxxIn`: request body; `XxxOut`: response body; `XxxUpdate`: partial updates.
+- Response models include read-only fields (e.g., `id`, `created_at`, `updated_at`); request bodies do not.
+
+## Modeling Details
+- Use `Field` for constraints (min/max length, regex, defaults, etc.).
+- Nullability: for optional-but-present fields, use optional types; avoid excessive `Optional`.
+- Use Pydantic v2 features for validation and conversion; avoid exposing ORM directly.
+- Never expose sensitive fields in responses (e.g., secrets, tokens, internal IDs that shouldn't be public).
+- Use `model_config = {"from_attributes": True}` when constructing responses directly from ORM objects.
+
+## Module Organization
+- **`app/schemas/user.py`**: User and auth schemas
+  - Session responses: `TokenOut`, `UserOut`
+  - Role management: `RoleUpdateIn`
+  - Used by `auth` and `admin` routers
+- **`app/schemas/content.py`**: Content management schemas
+  - CRUD: `ContentCreateIn`, `ContentUpdateIn`, `ContentOut`, `ContentListOut`
+  - Upload: `PresignedUrlOut`
+  - Used by `content` router
+- **`app/schemas/audit.py`**: Audit schemas
+  - Review: `AuditCreateIn`, `AuditLogOut`
+  - Used by `audit` router
+
+## Compatibility and Evolution
+- Additive changes should be backward-compatible; removals/renames should go through versioning or compatibility layers.

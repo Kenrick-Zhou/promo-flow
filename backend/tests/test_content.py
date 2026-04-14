@@ -1,5 +1,6 @@
 import uuid
 from collections.abc import AsyncGenerator
+from types import SimpleNamespace
 
 import pytest
 import pytest_asyncio
@@ -8,14 +9,23 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 import app.routers.content as content_router
+import app.services.content.core as content_core
 import app.services.infrastructure.ai as ai_service
 from app.core.deps import get_current_user
-from app.domains.content import ContentType, CreateContentCommand, UserRole
+from app.domains.content import (
+    AiStatus,
+    ContentOutput,
+    ContentStatus,
+    ContentType,
+    CreateContentCommand,
+    UserRole,
+)
 from app.main import app
 from app.models.category import Category
 from app.models.content import Content
 from app.models.user import User
 from app.services.content import create_content
+from app.services.content.core import _render_download_intro_markdown, send_file_to_user
 from tests.conftest import TEST_PREFIX
 
 _RUN = uuid.uuid4().hex[:8]
@@ -319,3 +329,212 @@ async def test_run_ai_analysis_uses_context_and_generates_title_after_analysis(
     assert content.ai_summary == "强调胶原蛋白产品卖点与目标人群。"
     assert content.ai_keywords == ["胶原蛋白", "焕亮", "女性营养"]
     assert content.ai_status.value == "completed"
+
+
+def test_render_download_intro_markdown_includes_key_fields():
+    markdown = _render_download_intro_markdown(
+        ContentOutput(
+            id=1,
+            title="春季焕新主视觉",
+            description=None,
+            tags=["海报", "春季上新"],
+            content_type=ContentType.image,
+            status=ContentStatus.approved,
+            file_key="uploads/demo.png",
+            file_url="https://example.com/demo.png",
+            file_size=None,
+            media_width=None,
+            media_height=None,
+            view_count=128,
+            download_count=32,
+            ai_summary="画面以清新绿色为主，突出春日促销氛围。",
+            ai_keywords=["春季营销", "清新", "促销海报"],
+            ai_status=AiStatus.completed,
+            ai_error=None,
+            ai_processed_at=None,
+            uploaded_by=7,
+            uploaded_by_name="市场设计组",
+            category_id=11,
+            category_name="活动海报",
+            primary_category_name="电商设计",
+            created_at="2026-04-13T00:00:00+00:00",
+            updated_at="2026-04-13T00:00:00+00:00",
+        )
+    )
+
+    assert "春季焕新主视觉" in markdown
+    assert "电商设计 / 活动海报" in markdown
+    assert "海报、春季上新" in markdown
+    assert "春季营销、清新、促销海报" in markdown
+    assert "市场设计组" in markdown
+    assert "浏览 128 次，下载 32 次" in markdown
+
+
+def _build_download_output(*, content_type: ContentType) -> ContentOutput:
+    return ContentOutput(
+        id=1,
+        title="春季焕新主视觉",
+        description=None,
+        tags=["海报", "春季上新"],
+        content_type=content_type,
+        status=ContentStatus.approved,
+        file_key=(
+            "uploads/demo.png"
+            if content_type == ContentType.image
+            else "uploads/demo.mp4"
+        ),
+        file_url=(
+            "https://example.com/demo.png"
+            if content_type == ContentType.image
+            else "https://example.com/demo.mp4"
+        ),
+        file_size=None,
+        media_width=None,
+        media_height=None,
+        view_count=128,
+        download_count=32,
+        ai_summary="画面以清新绿色为主，突出春日促销氛围。",
+        ai_keywords=["春季营销", "清新", "促销海报"],
+        ai_status=AiStatus.completed,
+        ai_error=None,
+        ai_processed_at=None,
+        uploaded_by=7,
+        uploaded_by_name="市场设计组",
+        category_id=11,
+        category_name="活动海报",
+        primary_category_name="电商设计",
+        created_at="2026-04-13T00:00:00+00:00",
+        updated_at="2026-04-13T00:00:00+00:00",
+    )
+
+
+def _install_download_test_stubs(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    content_type: ContentType,
+    fail_markdown: bool = False,
+) -> list[tuple[str, str]]:
+    events: list[tuple[str, str]] = []
+    output = _build_download_output(content_type=content_type)
+    content = SimpleNamespace(
+        file_url=output.file_url,
+        file_key=output.file_key,
+        content_type=output.content_type,
+    )
+
+    class _AsyncSessionContext:
+        async def __aenter__(self):
+            return object()
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+    class _FakeResponse:
+        status_code = 200
+        headers = {"content-length": "3"}
+
+        def raise_for_status(self) -> None:
+            return None
+
+        def iter_bytes(self, chunk_size: int):
+            assert chunk_size == 65536
+            yield b"abc"
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    class _FakeHttpClient:
+        def __init__(self, *, timeout: float):
+            assert timeout == 120.0
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def stream(self, method: str, url: str):
+            assert method == "GET"
+            assert url == output.file_url
+            return _FakeResponse()
+
+    async def fake_get_content_orm(db: object, content_id: int):
+        assert content_id == 1
+        return content
+
+    async def fake_send_markdown(open_id: str, title: str, markdown: str) -> None:
+        events.append(("markdown", markdown))
+        assert open_id == "ou_test"
+        assert title == "素材已开始准备"
+        if fail_markdown:
+            raise RuntimeError("markdown failed")
+
+    def fake_send_image(open_id: str, file_stream, file_name: str) -> None:
+        events.append(("image", file_name))
+        assert open_id == "ou_test"
+        assert file_stream.read() == b"abc"
+
+    def fake_send_file(open_id: str, file_stream, file_name: str) -> None:
+        events.append(("file", file_name))
+        assert open_id == "ou_test"
+        assert file_stream.read() == b"abc"
+
+    async def fake_to_thread(func, *args):
+        func(*args)
+
+    monkeypatch.setattr(content_core, "get_content_orm", fake_get_content_orm)
+    monkeypatch.setattr(content_core, "_content_to_output", lambda _: output)
+    monkeypatch.setattr(
+        content_core, "_render_download_intro_markdown", lambda _: "介绍文案"
+    )
+    monkeypatch.setattr(
+        "app.db.session.AsyncSessionLocal", lambda: _AsyncSessionContext()
+    )
+    monkeypatch.setattr(
+        "app.services.infrastructure.feishu.send_markdown_to_user",
+        fake_send_markdown,
+    )
+    monkeypatch.setattr(
+        "app.services.infrastructure.feishu.send_image_to_user_sync", fake_send_image
+    )
+    monkeypatch.setattr(
+        "app.services.infrastructure.feishu.send_file_to_user_sync", fake_send_file
+    )
+    monkeypatch.setattr("httpx.Client", _FakeHttpClient)
+    monkeypatch.setattr("asyncio.to_thread", fake_to_thread)
+    return events
+
+
+@pytest.mark.asyncio
+async def test_send_file_to_user_sends_markdown_before_image(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    events = _install_download_test_stubs(monkeypatch, content_type=ContentType.image)
+
+    await send_file_to_user(1, feishu_open_id="ou_test")
+
+    assert events == [
+        ("markdown", "介绍文案"),
+        ("image", "demo.png"),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_send_file_to_user_continues_when_markdown_send_fails(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    events = _install_download_test_stubs(
+        monkeypatch,
+        content_type=ContentType.video,
+        fail_markdown=True,
+    )
+
+    await send_file_to_user(1, feishu_open_id="ou_test")
+
+    assert events == [
+        ("markdown", "介绍文案"),
+        ("file", "demo.mp4"),
+    ]
