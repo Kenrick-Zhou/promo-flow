@@ -5,19 +5,14 @@ from __future__ import annotations
 import io
 import json
 import logging
-from typing import IO
-
-import lark_oapi as lark
-from lark_oapi.api.im.v1 import (
-    CreateFileRequest,
-    CreateFileRequestBody,
-    CreateImageRequest,
-    CreateImageRequestBody,
-    CreateMessageRequest,
-    CreateMessageRequestBody,
-)
+from functools import lru_cache
+from types import SimpleNamespace
+from typing import IO, TYPE_CHECKING, Any
 
 from app.core.config import settings
+
+if TYPE_CHECKING:
+    import lark_oapi as lark
 
 logger = logging.getLogger("promoflow.api")
 
@@ -25,17 +20,42 @@ logger = logging.getLogger("promoflow.api")
 # Singleton client – token lifecycle managed automatically by SDK
 # ---------------------------------------------------------------------------
 
-_client: lark.Client | None = None
+_client: Any | None = None
+
+
+@lru_cache(maxsize=1)
+def _get_lark_sdk() -> SimpleNamespace:
+    """Lazily import Feishu SDK to avoid import-time side effects in tests."""
+    import lark_oapi as lark
+    from lark_oapi.api.im.v1 import (
+        CreateFileRequest,
+        CreateFileRequestBody,
+        CreateImageRequest,
+        CreateImageRequestBody,
+        CreateMessageRequest,
+        CreateMessageRequestBody,
+    )
+
+    return SimpleNamespace(
+        lark=lark,
+        CreateFileRequest=CreateFileRequest,
+        CreateFileRequestBody=CreateFileRequestBody,
+        CreateImageRequest=CreateImageRequest,
+        CreateImageRequestBody=CreateImageRequestBody,
+        CreateMessageRequest=CreateMessageRequest,
+        CreateMessageRequestBody=CreateMessageRequestBody,
+    )
 
 
 def get_lark_client() -> lark.Client:
+    sdk = _get_lark_sdk()
     global _client
     if _client is None:
         _client = (
-            lark.Client.builder()
+            sdk.lark.Client.builder()
             .app_id(settings.FEISHU_APP_ID)
             .app_secret(settings.FEISHU_APP_SECRET)
-            .log_level(lark.LogLevel.INFO)
+            .log_level(sdk.lark.LogLevel.INFO)
             .build()
         )
     return _client
@@ -48,12 +68,13 @@ def get_lark_client() -> lark.Client:
 
 async def send_text_to_chat(chat_id: str, text: str) -> None:
     """Send a plain text message to a group chat."""
+    sdk = _get_lark_sdk()
     client = get_lark_client()
     req = (
-        CreateMessageRequest.builder()
+        sdk.CreateMessageRequest.builder()
         .receive_id_type("chat_id")
         .request_body(
-            CreateMessageRequestBody.builder()
+            sdk.CreateMessageRequestBody.builder()
             .receive_id(chat_id)
             .msg_type("text")
             .content(json.dumps({"text": text}))
@@ -68,6 +89,7 @@ async def send_text_to_chat(chat_id: str, text: str) -> None:
 
 async def send_markdown_to_user(open_id: str, title: str, markdown: str) -> None:
     """Send a markdown-based interactive card to a user by open_id."""
+    sdk = _get_lark_sdk()
     client = get_lark_client()
     card = {
         "header": {
@@ -85,10 +107,10 @@ async def send_markdown_to_user(open_id: str, title: str, markdown: str) -> None
         ],
     }
     req = (
-        CreateMessageRequest.builder()
+        sdk.CreateMessageRequest.builder()
         .receive_id_type("open_id")
         .request_body(
-            CreateMessageRequestBody.builder()
+            sdk.CreateMessageRequestBody.builder()
             .receive_id(open_id)
             .msg_type("interactive")
             .content(json.dumps(card, ensure_ascii=False))
@@ -109,13 +131,14 @@ async def send_markdown_to_user(open_id: str, title: str, markdown: str) -> None
 
 async def send_image_to_user(open_id: str, file_bytes: bytes, file_name: str) -> None:
     """Upload image to Feishu then send to user by open_id."""
+    sdk = _get_lark_sdk()
     client = get_lark_client()
 
     # 1. Upload image
     upload_req = (
-        CreateImageRequest.builder()
+        sdk.CreateImageRequest.builder()
         .request_body(
-            CreateImageRequestBody.builder()
+            sdk.CreateImageRequestBody.builder()
             .image_type("message")
             .image(io.BytesIO(file_bytes))
             .build()
@@ -136,10 +159,10 @@ async def send_image_to_user(open_id: str, file_bytes: bytes, file_name: str) ->
 
     # 2. Send to user
     send_req = (
-        CreateMessageRequest.builder()
+        sdk.CreateMessageRequest.builder()
         .receive_id_type("open_id")
         .request_body(
-            CreateMessageRequestBody.builder()
+            sdk.CreateMessageRequestBody.builder()
             .receive_id(open_id)
             .msg_type("image")
             .content(json.dumps({"image_key": image_key}))
@@ -160,14 +183,15 @@ async def send_image_to_user(open_id: str, file_bytes: bytes, file_name: str) ->
 
 async def send_file_to_user(open_id: str, file_bytes: bytes, file_name: str) -> None:
     """Upload file (video) to Feishu then send to user by open_id."""
+    sdk = _get_lark_sdk()
     client = get_lark_client()
 
     # 1. Upload file – use "stream" so it can be sent as msg_type="file"
     #    (file_type="mp4" creates a "media" resource that requires an image cover)
     upload_req = (
-        CreateFileRequest.builder()
+        sdk.CreateFileRequest.builder()
         .request_body(
-            CreateFileRequestBody.builder()
+            sdk.CreateFileRequestBody.builder()
             .file_type("stream")
             .file_name(file_name)
             .file(io.BytesIO(file_bytes))
@@ -189,10 +213,10 @@ async def send_file_to_user(open_id: str, file_bytes: bytes, file_name: str) -> 
 
     # 2. Send to user
     send_req = (
-        CreateMessageRequest.builder()
+        sdk.CreateMessageRequest.builder()
         .receive_id_type("open_id")
         .request_body(
-            CreateMessageRequestBody.builder()
+            sdk.CreateMessageRequestBody.builder()
             .receive_id(open_id)
             .msg_type("file")
             .content(json.dumps({"file_key": file_key}))
@@ -222,12 +246,13 @@ def send_image_to_user_sync(
     open_id: str, file_stream: IO[bytes], file_name: str
 ) -> None:
     """Upload image stream to Feishu then DM the user (synchronous)."""
+    sdk = _get_lark_sdk()
     client = get_lark_client()
 
     upload_req = (
-        CreateImageRequest.builder()
+        sdk.CreateImageRequest.builder()
         .request_body(
-            CreateImageRequestBody.builder()
+            sdk.CreateImageRequestBody.builder()
             .image_type("message")
             .image(file_stream)
             .build()
@@ -247,10 +272,10 @@ def send_image_to_user_sync(
     logger.info("Feishu image uploaded (sync): image_key=%s", image_key)
 
     send_req = (
-        CreateMessageRequest.builder()
+        sdk.CreateMessageRequest.builder()
         .receive_id_type("open_id")
         .request_body(
-            CreateMessageRequestBody.builder()
+            sdk.CreateMessageRequestBody.builder()
             .receive_id(open_id)
             .msg_type("image")
             .content(json.dumps({"image_key": image_key}))
@@ -273,12 +298,13 @@ def send_file_to_user_sync(
     open_id: str, file_stream: IO[bytes], file_name: str
 ) -> None:
     """Upload file stream to Feishu then DM the user (synchronous)."""
+    sdk = _get_lark_sdk()
     client = get_lark_client()
 
     upload_req = (
-        CreateFileRequest.builder()
+        sdk.CreateFileRequest.builder()
         .request_body(
-            CreateFileRequestBody.builder()
+            sdk.CreateFileRequestBody.builder()
             .file_type("stream")
             .file_name(file_name)
             .file(file_stream)
@@ -299,10 +325,10 @@ def send_file_to_user_sync(
     logger.info("Feishu file uploaded (sync): file_key=%s", file_key)
 
     send_req = (
-        CreateMessageRequest.builder()
+        sdk.CreateMessageRequest.builder()
         .receive_id_type("open_id")
         .request_body(
-            CreateMessageRequestBody.builder()
+            sdk.CreateMessageRequestBody.builder()
             .receive_id(open_id)
             .msg_type("file")
             .content(json.dumps({"file_key": file_key}))
