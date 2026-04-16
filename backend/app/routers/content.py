@@ -114,6 +114,8 @@ async def list_contents_route(
     status_filter: ContentStatus | None = Query(None, alias="status"),
     content_type: ContentType | None = None,
     my_uploads: bool = False,
+    category_id: int | None = None,
+    primary_category_id: int | None = None,
     offset: int = 0,
     limit: int = Query(20, le=100),
 ):
@@ -123,6 +125,8 @@ async def list_contents_route(
         status=status_filter,
         content_type=content_type,
         uploaded_by=uploaded_by,
+        category_id=category_id,
+        primary_category_id=primary_category_id,
         offset=offset,
         limit=limit,
     )

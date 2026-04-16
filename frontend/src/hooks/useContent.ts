@@ -7,6 +7,8 @@ interface ListParams {
   status?: string
   content_type?: string
   my_uploads?: boolean
+  category_id?: number
+  primary_category_id?: number
   offset?: number
   limit?: number
 }

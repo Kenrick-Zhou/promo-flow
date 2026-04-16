@@ -198,6 +198,8 @@ async def list_contents(
     status: ContentStatus | None = None,
     content_type: ContentType | None = None,
     uploaded_by: int | None = None,
+    category_id: int | None = None,
+    primary_category_id: int | None = None,
     offset: int = 0,
     limit: int = 20,
 ) -> ContentListOutput:
@@ -214,6 +216,18 @@ async def list_contents(
     if uploaded_by:
         stmt = stmt.where(Content.uploaded_by == uploaded_by)
         count_stmt = count_stmt.where(Content.uploaded_by == uploaded_by)
+    if category_id is not None:
+        stmt = stmt.where(Content.category_id == category_id)
+        count_stmt = count_stmt.where(Content.category_id == category_id)
+    if primary_category_id is not None:
+        # Filter by primary category: match content whose category's parent
+        subq = (
+            select(Category.id)
+            .where(Category.parent_id == primary_category_id)
+            .scalar_subquery()
+        )
+        stmt = stmt.where(Content.category_id.in_(subq))
+        count_stmt = count_stmt.where(Content.category_id.in_(subq))
 
     total = (await db.execute(count_stmt)).scalar_one()
     items = (

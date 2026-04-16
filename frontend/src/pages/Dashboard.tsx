@@ -6,7 +6,8 @@ import LoadingDots from '@/components/ui/LoadingDots'
 import Toast from '@/components/ui/Toast'
 import { useContent } from '@/hooks/useContent'
 import { useSearch } from '@/hooks/useSearch'
-import type { Content } from '@/types'
+import { useSystem } from '@/hooks/useSystem'
+import type { CategoryTree, Content } from '@/types'
 
 const DISCOVERY_TABS = [
   { key: 'latest', label: '最新' },
@@ -23,6 +24,7 @@ const SWIPE_ACTIVATION_DISTANCE = 10
 export default function Dashboard() {
   const { listContents, loading, recordView, recordDownload } = useContent()
   const { semanticSearch, loading: searchLoading } = useSearch()
+  const { listCategories } = useSystem()
   const [items, setItems] = useState<Content[]>([])
   const [activeTab, setActiveTab] = useState<DiscoveryTabKey>('latest')
   const [query, setQuery] = useState('')
@@ -31,6 +33,10 @@ export default function Dashboard() {
   const [showDownloadToast, setShowDownloadToast] = useState(false)
   const [dragOffset, setDragOffset] = useState(0)
   const [isDragging, setIsDragging] = useState(false)
+  const [categoryTree, setCategoryTree] = useState<CategoryTree[]>([])
+  const [primaryCategoryId, setPrimaryCategoryId] = useState<number | null>(null)
+  const [secondaryCategoryId, setSecondaryCategoryId] = useState<number | null>(null)
+  const [contentTypeFilter, setContentTypeFilter] = useState<'image' | 'video' | null>(null)
   const contentViewportRef = useRef<HTMLDivElement | null>(null)
   const touchSessionRef = useRef<{
     startX: number
@@ -40,11 +46,41 @@ export default function Dashboard() {
   } | null>(null)
 
   useEffect(() => {
+    listCategories()
+      .then(setCategoryTree)
+      .catch(() => {})
+  }, [listCategories])
+
+  const primaryCategories = categoryTree
+  const secondaryCategories =
+    primaryCategoryId !== null
+      ? (categoryTree.find((c) => c.id === primaryCategoryId)?.children ?? [])
+      : []
+
+  useEffect(() => {
     if (isSearchMode) return
-    listContents({ status: 'approved' }).then((r) => {
+    const params: Record<string, unknown> = { status: 'approved' }
+    if (activeTab === 'all') {
+      if (secondaryCategoryId !== null) {
+        params.category_id = secondaryCategoryId
+      } else if (primaryCategoryId !== null) {
+        params.primary_category_id = primaryCategoryId
+      }
+      if (contentTypeFilter !== null) {
+        params.content_type = contentTypeFilter
+      }
+    }
+    listContents(params).then((r) => {
       setItems(r.items)
     })
-  }, [listContents, isSearchMode])
+  }, [
+    listContents,
+    isSearchMode,
+    activeTab,
+    primaryCategoryId,
+    secondaryCategoryId,
+    contentTypeFilter,
+  ])
 
   useEffect(() => {
     if (!showDownloadToast) {
@@ -102,6 +138,17 @@ export default function Dashboard() {
     setActiveTab(nextTab)
     setDragOffset(0)
     setIsDragging(false)
+    if (nextTab !== 'all') {
+      setPrimaryCategoryId(null)
+      setSecondaryCategoryId(null)
+      setContentTypeFilter(null)
+    }
+  }
+
+  function handlePrimaryCategoryChange(value: string) {
+    const id = value === '' ? null : Number(value)
+    setPrimaryCategoryId(id)
+    setSecondaryCategoryId(null)
   }
 
   function handleTouchStart(event: TouchEvent<HTMLDivElement>) {
@@ -239,6 +286,57 @@ export default function Dashboard() {
             )
           })}
         </div>
+
+        {activeTab === 'all' && (
+          <div className="flex gap-2">
+            <select
+              value={primaryCategoryId ?? ''}
+              onChange={(e) => handlePrimaryCategoryChange(e.target.value)}
+              className="flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 shadow-sm focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+            >
+              <option value="">全部类目</option>
+              {primaryCategories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+
+            <select
+              value={secondaryCategoryId ?? ''}
+              disabled={primaryCategoryId === null}
+              onChange={(e) =>
+                setSecondaryCategoryId(e.target.value === '' ? null : Number(e.target.value))
+              }
+              className={clsx(
+                'flex-1 rounded-lg border px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-purple-500',
+                primaryCategoryId === null
+                  ? 'cursor-not-allowed border-gray-200 bg-gray-100 text-gray-400 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-600'
+                  : 'border-gray-300 bg-white text-gray-700 focus:border-purple-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200',
+              )}
+            >
+              <option value="">全部子类目</option>
+              {secondaryCategories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+
+            <select
+              value={contentTypeFilter ?? ''}
+              onChange={(e) => {
+                const v = e.target.value
+                setContentTypeFilter(v === '' ? null : (v as 'image' | 'video'))
+              }}
+              className="flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 shadow-sm focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+            >
+              <option value="">图片&amp;视频</option>
+              <option value="image">图片</option>
+              <option value="video">视频</option>
+            </select>
+          </div>
+        )}
       </div>
 
       <div
