@@ -191,59 +191,59 @@ export default function Audit() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => navigate('/me')}
-            className="rounded-lg p-1.5 text-gray-600 transition-colors active:bg-gray-100 dark:text-gray-300 dark:active:bg-gray-700"
-            aria-label="返回我的页面"
-          >
-            <ArrowLeft className="size-5" />
-          </button>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">审核工作台</h1>
-        </div>
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() =>
-              void refreshAuditItems({
-                force: true,
-                showIndicator: true,
-                status: activeStatus,
-              })
-            }
-            disabled={refreshing}
-            className="inline-flex items-center rounded-lg border border-gray-200 bg-white p-2 text-gray-600 transition hover:border-purple-200 hover:text-purple-700 disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:border-purple-500/40 dark:hover:text-purple-300"
-            aria-label="刷新审核内容"
-          >
-            <RefreshCw className={`size-4 ${refreshing ? 'animate-spin' : ''}`} />
-          </button>
+      <div className="mb-4 flex items-center gap-3">
+        <button
+          type="button"
+          onClick={() => navigate('/me')}
+          className="rounded-lg p-1.5 text-gray-600 transition-colors active:bg-gray-100 dark:text-gray-300 dark:active:bg-gray-700"
+          aria-label="返回我的页面"
+        >
+          <ArrowLeft className="size-5" />
+        </button>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">审核工作台</h1>
+      </div>
+
+      {/* 状态 tabs（吸顶） */}
+      <div className="sticky top-0 z-20 -mx-4 mb-4 border-b border-gray-200/70 bg-gray-50/95 px-4 py-2 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-gray-50/80 dark:border-gray-800/80 dark:bg-gray-900/95 dark:supports-[backdrop-filter]:bg-gray-900/80">
+        <div className="grid w-full grid-cols-3 rounded-2xl border border-gray-200 bg-white p-1 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+          {AUDIT_TABS.map((tab) => {
+            const isActive = tab.key === activeStatus
+
+            return (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setActiveStatus(tab.key)}
+                className={`rounded-lg px-4 py-2 text-center text-sm font-medium transition-all duration-300 ${
+                  isActive
+                    ? 'bg-purple-600 text-white shadow-sm'
+                    : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-white'
+                }`}
+                aria-pressed={isActive}
+              >
+                {tab.label}
+              </button>
+            )
+          })}
         </div>
       </div>
 
-      <div className="mb-6 grid w-full grid-cols-3 rounded-xl border border-gray-200 bg-white p-1 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-        {AUDIT_TABS.map((tab) => {
-          const isActive = tab.key === activeStatus
-
-          return (
-            <button
-              key={tab.key}
-              type="button"
-              onClick={() => setActiveStatus(tab.key)}
-              className={`rounded-lg px-4 py-2 text-center text-sm font-medium transition ${
-                isActive
-                  ? 'bg-purple-600 text-white shadow-sm'
-                  : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-white'
-              }`}
-            >
-              {tab.label}
-            </button>
-          )
-        })}
-      </div>
-
-      <div className="mb-4">
+      <div className="mb-4 flex items-center gap-3">
+        <button
+          type="button"
+          onClick={() =>
+            void refreshAuditItems({
+              force: true,
+              showIndicator: true,
+              status: activeStatus,
+            })
+          }
+          disabled={refreshing}
+          className="inline-flex items-center rounded-lg border border-gray-200 bg-white p-1.5 text-gray-600 transition hover:border-purple-200 hover:text-purple-700 disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:border-purple-500/40 dark:hover:text-purple-300"
+          aria-label="刷新审核内容"
+        >
+          <RefreshCw className={`size-4 ${refreshing ? 'animate-spin' : ''}`} />
+        </button>
         <span
           className={`inline-flex rounded-full px-3 py-1 text-sm font-medium ${STATUS_BADGES[activeStatus].className} dark:bg-gray-700/60 dark:text-gray-200`}
         >

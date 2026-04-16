@@ -80,22 +80,26 @@ export default function MyUploads() {
         <h1 className="text-lg font-bold text-gray-900 dark:text-white">我的上传</h1>
       </div>
 
-      {/* 状态筛选 */}
-      <div className="mb-4 flex gap-1 rounded-lg bg-gray-100 p-1 dark:bg-gray-700">
-        {STATUS_TABS.map((tab) => (
-          <button
-            key={tab.key}
-            onClick={() => setStatus(tab.key)}
-            className={clsx(
-              'flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
-              status === tab.key
-                ? 'bg-white text-purple-700 shadow-sm dark:bg-gray-800 dark:text-purple-300'
-                : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200',
-            )}
-          >
-            {tab.label}
-          </button>
-        ))}
+      {/* 状态筛选（吸顶） */}
+      <div className="sticky top-0 z-20 -mx-4 mb-6 border-b border-gray-200/70 bg-gray-50/95 px-4 py-2 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-gray-50/80 dark:border-gray-800/80 dark:bg-gray-900/95 dark:supports-[backdrop-filter]:bg-gray-900/80">
+        <div className="grid w-full grid-cols-3 rounded-2xl border border-gray-200 bg-white p-1 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+          {STATUS_TABS.map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => setStatus(tab.key)}
+              className={clsx(
+                'rounded-lg px-4 py-2 text-center text-sm font-medium transition-all duration-300',
+                status === tab.key
+                  ? 'bg-purple-600 text-white shadow-sm'
+                  : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-white',
+              )}
+              aria-pressed={status === tab.key}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {loading ? (
