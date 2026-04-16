@@ -1,5 +1,7 @@
 from contextlib import asynccontextmanager
 
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
@@ -9,6 +11,9 @@ from app.core.config import settings
 from app.core.middleware import RequestIdMiddleware, register_exception_handlers
 from app.db.session import engine
 from app.routers.router import router as api_router
+from app.workers.hot_score import refresh_all_hot_scores
+
+scheduler = AsyncIOScheduler()
 
 
 @asynccontextmanager
@@ -16,7 +21,19 @@ async def lifespan(app: FastAPI):
     # 启动时预热连接池，避免第一批请求承担 TCP+TLS+PG 握手延迟
     async with engine.begin() as conn:
         await conn.execute(text("SELECT 1"))
+
+    # 每天凌晨 3 点全量刷新热度值
+    scheduler.add_job(
+        refresh_all_hot_scores,
+        trigger=CronTrigger(hour=3, minute=0),
+        id="daily_hot_score_refresh",
+        replace_existing=True,
+    )
+    scheduler.start()
+
     yield
+
+    scheduler.shutdown(wait=False)
     # 优雅关闭：归还所有连接，避免云 RDS 侧留悬挂连接
     await engine.dispose()
 

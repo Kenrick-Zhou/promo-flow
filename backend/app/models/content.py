@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String, Text, func
+from sqlalchemy import DateTime, Enum, Float, ForeignKey, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -46,6 +46,14 @@ class Content(Base):
     # Counters
     view_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     download_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    # Hot score (popularity ranking)
+    hot_score: Mapped[float] = mapped_column(
+        Float, nullable=False, default=0.0, index=True
+    )
+    hot_score_updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     # AI generated fields
     ai_summary: Mapped[str | None] = mapped_column(Text, nullable=True)

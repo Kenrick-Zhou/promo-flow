@@ -60,6 +60,9 @@ export default function Dashboard() {
   useEffect(() => {
     if (isSearchMode) return
     const params: Record<string, unknown> = { status: 'approved' }
+    if (activeTab === 'popular') {
+      params.sort_by = 'hot'
+    }
     if (activeTab === 'all') {
       if (secondaryCategoryId !== null) {
         params.category_id = secondaryCategoryId

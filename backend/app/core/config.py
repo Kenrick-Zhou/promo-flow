@@ -101,6 +101,12 @@ class Settings(BaseSettings):
     # ── Search: Observability ────────────────────────────────
     SEARCH_DEBUG_TIMING: bool = False
 
+    # ── Hot Score ────────────────────────────────────────────
+    HOT_SCORE_VIEW_WEIGHT: float = 1.0
+    HOT_SCORE_DOWNLOAD_WEIGHT: float = 5.0
+    HOT_SCORE_FRESHNESS_HALF_LIFE_DAYS: float = 10.0
+    HOT_SCORE_TIME_DECAY_LAMBDA: float = 0.05
+
 
 @lru_cache
 def get_settings() -> Settings:

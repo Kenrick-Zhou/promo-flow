@@ -24,9 +24,15 @@ from app.services.content.errors import (
     InvalidCategoryError,
     raise_content_error,
 )
+from app.services.content.hot_score import (
+    calculate_hot_score,
+    update_all_hot_scores,
+    update_hot_score,
+)
 
 __all__ = [
     "audit_content",
+    "calculate_hot_score",
     "create_content",
     "delete_content",
     "edit_content_metadata",
@@ -38,9 +44,11 @@ __all__ = [
     "mark_content_ai_failed",
     "mark_content_ai_processing",
     "send_file_to_user",
+    "update_all_hot_scores",
     "update_content",
     "update_content_ai_fields",
     "update_content_media_dimensions",
+    "update_hot_score",
     "ContentForbiddenError",
     "ContentNotFoundError",
     "InvalidAuditActionError",

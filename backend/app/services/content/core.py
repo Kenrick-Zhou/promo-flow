@@ -200,6 +200,7 @@ async def list_contents(
     uploaded_by: int | None = None,
     category_id: int | None = None,
     primary_category_id: int | None = None,
+    sort_by: str = "latest",
     offset: int = 0,
     limit: int = 20,
 ) -> ContentListOutput:
@@ -230,12 +231,12 @@ async def list_contents(
         count_stmt = count_stmt.where(Content.category_id.in_(subq))
 
     total = (await db.execute(count_stmt)).scalar_one()
+
+    order_clause = (
+        Content.hot_score.desc() if sort_by == "hot" else Content.created_at.desc()
+    )
     items = (
-        (
-            await db.execute(
-                stmt.offset(offset).limit(limit).order_by(Content.created_at.desc())
-            )
-        )
+        (await db.execute(stmt.offset(offset).limit(limit).order_by(order_clause)))
         .unique()
         .scalars()
         .all()

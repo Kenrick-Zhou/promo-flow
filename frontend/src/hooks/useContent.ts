@@ -9,6 +9,7 @@ interface ListParams {
   my_uploads?: boolean
   category_id?: number
   primary_category_id?: number
+  sort_by?: string
   offset?: number
   limit?: number
 }

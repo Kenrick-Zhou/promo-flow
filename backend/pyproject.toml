@@ -21,6 +21,7 @@ dependencies = [
     "pgvector>=0.3.5",
     "jinja2>=3.1.6",
     "lark-oapi>=1.5.3",
+    "apscheduler>=3.11.2",
 ]
 
 [dependency-groups]

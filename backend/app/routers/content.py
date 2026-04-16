@@ -116,6 +116,7 @@ async def list_contents_route(
     my_uploads: bool = False,
     category_id: int | None = None,
     primary_category_id: int | None = None,
+    sort_by: str = Query("latest", pattern="^(latest|hot)$"),
     offset: int = 0,
     limit: int = Query(20, le=100),
 ):
@@ -127,6 +128,7 @@ async def list_contents_route(
         uploaded_by=uploaded_by,
         category_id=category_id,
         primary_category_id=primary_category_id,
+        sort_by=sort_by,
         offset=offset,
         limit=limit,
     )
@@ -190,6 +192,7 @@ async def delete_content_route(
 @router.post("/{content_id}/view", status_code=status.HTTP_204_NO_CONTENT)
 async def record_view_route(
     content_id: int,
+    background_tasks: BackgroundTasks,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
@@ -198,6 +201,7 @@ async def record_view_route(
         await increment_view_count(db, content_id)
     except ContentNotFoundError as exc:
         raise_content_error(exc)
+    background_tasks.add_task(_update_hot_score_bg, content_id)
 
 
 @router.post("/{content_id}/download", status_code=status.HTTP_204_NO_CONTENT)
@@ -212,9 +216,25 @@ async def record_download_route(
         await increment_download_count(db, content_id)
     except ContentNotFoundError as exc:
         raise_content_error(exc)
+    background_tasks.add_task(_update_hot_score_bg, content_id)
     background_tasks.add_task(
         send_file_to_user, content_id, feishu_open_id=current_user.feishu_open_id
     )
+
+
+async def _update_hot_score_bg(content_id: int) -> None:
+    """Background task: recalculate hot score for a single content."""
+    import logging
+
+    from app.db.session import AsyncSessionLocal
+    from app.services.content.hot_score import update_hot_score
+
+    logger = logging.getLogger(__name__)
+    try:
+        async with AsyncSessionLocal() as db:
+            await update_hot_score(db, content_id)
+    except Exception:
+        logger.exception("Failed to update hot score for content %d", content_id)
 
 
 async def _run_ai_analysis(content_id: int, file_key: str, content_type: str) -> None:
