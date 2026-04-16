@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
-import MasonryGrid from '@/components/content/MasonryGrid'
+import ContentGrid from '@/components/content/ContentGrid'
 import ContentDetail from '@/components/content/ContentDetail'
 import LoadingDots from '@/components/ui/LoadingDots'
+import Toast from '@/components/ui/Toast'
 import { useContent } from '@/hooks/useContent'
 import type { Content, ContentStatus } from '@/types'
 import { clsx } from 'clsx'
@@ -16,10 +17,11 @@ const STATUS_TABS: Array<{ key: ContentStatus; label: string }> = [
 
 export default function MyUploads() {
   const navigate = useNavigate()
-  const { listContents, loading } = useContent()
+  const { listContents, loading, recordView, recordDownload } = useContent()
   const [items, setItems] = useState<Content[]>([])
   const [status, setStatus] = useState<ContentStatus>('pending')
   const [selectedContent, setSelectedContent] = useState<Content | null>(null)
+  const [showDownloadToast, setShowDownloadToast] = useState(false)
 
   useEffect(() => {
     listContents({
@@ -29,6 +31,41 @@ export default function MyUploads() {
       setItems(r.items)
     })
   }, [status, listContents])
+
+  useEffect(() => {
+    if (!showDownloadToast) {
+      return
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setShowDownloadToast(false)
+    }, 3000)
+
+    return () => {
+      window.clearTimeout(timeoutId)
+    }
+  }, [showDownloadToast])
+
+  function handleSelectContent(content: Content) {
+    setSelectedContent(content)
+    recordView(content.id).then(() => {
+      setItems((prev) =>
+        prev.map((c) => (c.id === content.id ? { ...c, view_count: c.view_count + 1 } : c)),
+      )
+    })
+  }
+
+  async function handleDownload(content: Content) {
+    try {
+      await recordDownload(content.id)
+      setItems((prev) =>
+        prev.map((c) => (c.id === content.id ? { ...c, download_count: c.download_count + 1 } : c)),
+      )
+      setShowDownloadToast(true)
+    } catch {
+      setShowDownloadToast(false)
+    }
+  }
 
   return (
     <div>
@@ -68,12 +105,18 @@ export default function MyUploads() {
           <p>暂无上传内容</p>
         </div>
       ) : (
-        <MasonryGrid items={items} onSelect={(c) => setSelectedContent(c)} />
+        <ContentGrid items={items} onSelect={handleSelectContent} onDownload={handleDownload} />
       )}
 
       {selectedContent && (
         <ContentDetail content={selectedContent} onClose={() => setSelectedContent(null)} />
       )}
+
+      <Toast
+        open={showDownloadToast}
+        title="已通过方小集Bot发送"
+        description="请查看您的飞书消息"
+      />
     </div>
   )
 }

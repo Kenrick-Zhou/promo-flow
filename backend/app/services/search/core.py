@@ -16,6 +16,7 @@ from app.domains.content import (
 )
 from app.models.category import Category
 from app.models.content import Content
+from app.services.infrastructure.storage import get_public_url
 
 
 def _content_to_output(content: Content) -> ContentOutput:
@@ -29,7 +30,7 @@ def _content_to_output(content: Content) -> ContentOutput:
         content_type=ContentType(content.content_type),
         status=ContentStatus(content.status),
         file_key=content.file_key,
-        file_url=content.file_url,
+        file_url=content.file_url or get_public_url(content.file_key),
         file_size=content.file_size,
         media_width=content.media_width,
         media_height=content.media_height,

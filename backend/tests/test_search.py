@@ -11,6 +11,7 @@ from app.main import app
 from app.models.category import Category
 from app.models.content import Content
 from app.models.user import User
+from app.services.infrastructure.storage import get_public_url
 from tests.conftest import TEST_PREFIX
 
 _RUN = uuid.uuid4().hex[:8]
@@ -96,6 +97,10 @@ async def test_semantic_search_route_returns_results(
     assert len(results) >= 1
     ids = [r["content"]["id"] for r in results]
     assert content.id in ids
+    matched = next(
+        result for result in results if result["content"]["id"] == content.id
+    )
+    assert matched["content"]["file_url"] == get_public_url(content.file_key)
 
 
 @pytest.mark.asyncio

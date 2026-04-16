@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import MasonryGrid from '@/components/content/MasonryGrid'
+import ContentGrid from '@/components/content/ContentGrid'
 import ContentDetail from '@/components/content/ContentDetail'
 import LoadingDots from '@/components/ui/LoadingDots'
 import Toast from '@/components/ui/Toast'
@@ -149,7 +149,7 @@ export default function Dashboard() {
       {isLoading ? (
         <LoadingDots label="素材广场加载中…" />
       ) : (
-        <MasonryGrid items={items} onSelect={handleSelectContent} onDownload={handleDownload} />
+        <ContentGrid items={items} onSelect={handleSelectContent} onDownload={handleDownload} />
       )}
 
       {selectedContent && (
