@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, BackgroundTasks, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_db, require_role
@@ -49,6 +49,7 @@ async def list_pending(
 async def audit_content_route(
     content_id: int,
     action: AuditActionIn,
+    background_tasks: BackgroundTasks,
     current_user: Annotated[User, Depends(_reviewer_or_admin)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
@@ -63,7 +64,7 @@ async def audit_content_route(
     if action.status == AuditDecision.approved:
         from app.bot.handlers import notify_content_approved
 
-        await notify_content_approved(content_id)
+        background_tasks.add_task(notify_content_approved, content_id)
 
     return AuditLogOut.from_domain(output)
 

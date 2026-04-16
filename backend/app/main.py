@@ -1,3 +1,4 @@
+import asyncio
 from contextlib import asynccontextmanager
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -30,6 +31,11 @@ async def lifespan(app: FastAPI):
         replace_existing=True,
     )
     scheduler.start()
+
+    # 启动飞书 WebSocket 长连接客户端，接收机器人事件
+    from app.bot.ws_client import start_ws_client
+
+    start_ws_client(asyncio.get_running_loop())
 
     yield
 

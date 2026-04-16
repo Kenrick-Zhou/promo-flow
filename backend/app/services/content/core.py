@@ -86,26 +86,41 @@ def _format_markdown_list(items: list[str], *, empty_text: str = "暂无") -> st
     return "、".join(values)
 
 
-def _render_download_intro_markdown(content: ContentOutput) -> str:
-    """Render the pre-download intro shown to the user."""
+def _build_template_kwargs(content: ContentOutput) -> dict:
+    """Shared template variables for content announcement templates."""
     category_path = " / ".join(
         part
         for part in [content.primary_category_name, content.category_name]
         if part and part.strip()
     )
-    return render(
-        "download_content_intro.j2",
-        title=(content.title or "未命名素材").strip() or "未命名素材",
-        content_type_label=(
+    return {
+        "title": (content.title or "未命名素材").strip() or "未命名素材",
+        "content_type_label": (
             "图片" if content.content_type == ContentType.image else "视频"
         ),
-        category_path=category_path or "暂未分类",
-        tags_text=_format_markdown_list(content.tags),
-        ai_keywords_text=_format_markdown_list(content.ai_keywords),
-        ai_summary=(content.ai_summary or "").strip() or "暂未生成 AI 摘要",
-        uploaded_by_name=(content.uploaded_by_name or "未知").strip() or "未知",
+        "category_path": category_path or "暂未分类",
+        "tags_text": _format_markdown_list(content.tags),
+        "ai_keywords_text": _format_markdown_list(content.ai_keywords),
+        "ai_summary": (content.ai_summary or "").strip() or "暂未生成 AI 摘要",
+        "uploaded_by_name": (content.uploaded_by_name or "未知").strip() or "未知",
+    }
+
+
+def _render_download_intro_markdown(content: ContentOutput) -> str:
+    """Render the pre-download intro shown to the user."""
+    return render(
+        "download_content_intro.j2",
+        **_build_template_kwargs(content),
         view_count=content.view_count,
         download_count=content.download_count,
+    ).strip()
+
+
+def render_group_approved_markdown(content: ContentOutput) -> str:
+    """Render the group chat announcement for a newly approved content."""
+    return render(
+        "group_content_approved.j2",
+        **_build_template_kwargs(content),
     ).strip()
 
 

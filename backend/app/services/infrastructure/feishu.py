@@ -345,3 +345,155 @@ def send_file_to_user_sync(
         )
     else:
         logger.info("Feishu file sent (sync): open_id=%s", open_id)
+
+
+# ---------------------------------------------------------------------------
+# Group chat helpers – send interactive card / image / file to a group chat
+# ---------------------------------------------------------------------------
+
+
+async def send_interactive_card_to_chat(
+    chat_id: str, title: str, markdown: str
+) -> None:
+    """Send a markdown-based interactive card to a group chat."""
+    sdk = _get_lark_sdk()
+    client = get_lark_client()
+    card = {
+        "header": {
+            "template": "green",
+            "title": {"tag": "plain_text", "content": title},
+        },
+        "elements": [
+            {
+                "tag": "div",
+                "text": {
+                    "tag": "lark_md",
+                    "content": markdown,
+                },
+            }
+        ],
+    }
+    req = (
+        sdk.CreateMessageRequest.builder()
+        .receive_id_type("chat_id")
+        .request_body(
+            sdk.CreateMessageRequestBody.builder()
+            .receive_id(chat_id)
+            .msg_type("interactive")
+            .content(json.dumps(card, ensure_ascii=False))
+            .build()
+        )
+        .build()
+    )
+    resp = await client.im.v1.message.acreate(req)
+    if not resp.success():
+        logger.error(
+            "Feishu send card to chat failed: code=%s msg=%s", resp.code, resp.msg
+        )
+    else:
+        logger.info("Feishu card sent to chat_id=%s", chat_id)
+
+
+def send_image_to_chat_sync(
+    chat_id: str, file_stream: IO[bytes], file_name: str
+) -> None:
+    """Upload image stream to Feishu then send to group chat (synchronous)."""
+    sdk = _get_lark_sdk()
+    client = get_lark_client()
+
+    upload_req = (
+        sdk.CreateImageRequest.builder()
+        .request_body(
+            sdk.CreateImageRequestBody.builder()
+            .image_type("message")
+            .image(file_stream)
+            .build()
+        )
+        .build()
+    )
+    upload_resp = client.im.v1.image.create(upload_req)
+    if not upload_resp.success():
+        logger.error(
+            "Feishu image upload failed (sync): code=%s msg=%s",
+            upload_resp.code,
+            upload_resp.msg,
+        )
+        return
+
+    image_key = upload_resp.data.image_key
+    logger.info("Feishu image uploaded (sync): image_key=%s", image_key)
+
+    send_req = (
+        sdk.CreateMessageRequest.builder()
+        .receive_id_type("chat_id")
+        .request_body(
+            sdk.CreateMessageRequestBody.builder()
+            .receive_id(chat_id)
+            .msg_type("image")
+            .content(json.dumps({"image_key": image_key}))
+            .build()
+        )
+        .build()
+    )
+    send_resp = client.im.v1.message.create(send_req)
+    if not send_resp.success():
+        logger.error(
+            "Feishu send image to chat failed (sync): code=%s msg=%s",
+            send_resp.code,
+            send_resp.msg,
+        )
+    else:
+        logger.info("Feishu image sent (sync) to chat_id=%s", chat_id)
+
+
+def send_file_to_chat_sync(
+    chat_id: str, file_stream: IO[bytes], file_name: str
+) -> None:
+    """Upload file stream to Feishu then send to group chat (synchronous)."""
+    sdk = _get_lark_sdk()
+    client = get_lark_client()
+
+    upload_req = (
+        sdk.CreateFileRequest.builder()
+        .request_body(
+            sdk.CreateFileRequestBody.builder()
+            .file_type("stream")
+            .file_name(file_name)
+            .file(file_stream)
+            .build()
+        )
+        .build()
+    )
+    upload_resp = client.im.v1.file.create(upload_req)
+    if not upload_resp.success():
+        logger.error(
+            "Feishu file upload failed (sync): code=%s msg=%s",
+            upload_resp.code,
+            upload_resp.msg,
+        )
+        return
+
+    file_key = upload_resp.data.file_key
+    logger.info("Feishu file uploaded (sync): file_key=%s", file_key)
+
+    send_req = (
+        sdk.CreateMessageRequest.builder()
+        .receive_id_type("chat_id")
+        .request_body(
+            sdk.CreateMessageRequestBody.builder()
+            .receive_id(chat_id)
+            .msg_type("file")
+            .content(json.dumps({"file_key": file_key}))
+            .build()
+        )
+        .build()
+    )
+    send_resp = client.im.v1.message.create(send_req)
+    if not send_resp.success():
+        logger.error(
+            "Feishu send file to chat failed (sync): code=%s msg=%s",
+            send_resp.code,
+            send_resp.msg,
+        )
+    else:
+        logger.info("Feishu file sent (sync) to chat_id=%s", chat_id)
