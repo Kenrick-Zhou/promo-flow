@@ -25,6 +25,7 @@ from app.models.audit_log import AuditLog
 from app.models.category import Category
 from app.models.content import Content
 from app.models.tag import Tag
+from app.prompts import render
 from app.services.content.errors import (
     ContentForbiddenError,
     ContentNotFoundError,
@@ -75,6 +76,37 @@ def _content_to_output(content: Content) -> ContentOutput:
         created_at=str(content.created_at),
         updated_at=str(content.updated_at),
     )
+
+
+def _format_markdown_list(items: list[str], *, empty_text: str = "暂无") -> str:
+    """Render a compact markdown-friendly list."""
+    values = [item.strip() for item in items if item and item.strip()]
+    if not values:
+        return empty_text
+    return "、".join(values)
+
+
+def _render_download_intro_markdown(content: ContentOutput) -> str:
+    """Render the pre-download intro shown to the user."""
+    category_path = " / ".join(
+        part
+        for part in [content.primary_category_name, content.category_name]
+        if part and part.strip()
+    )
+    return render(
+        "download_content_intro.j2",
+        title=(content.title or "未命名素材").strip() or "未命名素材",
+        content_type_label=(
+            "图片" if content.content_type == ContentType.image else "视频"
+        ),
+        category_path=category_path or "暂未分类",
+        tags_text=_format_markdown_list(content.tags),
+        ai_keywords_text=_format_markdown_list(content.ai_keywords),
+        ai_summary=(content.ai_summary or "").strip() or "暂未生成 AI 摘要",
+        uploaded_by_name=(content.uploaded_by_name or "未知").strip() or "未知",
+        view_count=content.view_count,
+        download_count=content.download_count,
+    ).strip()
 
 
 async def _find_or_create_tags(db: AsyncSession, names: list[str]) -> list[Tag]:
@@ -423,6 +455,9 @@ async def send_file_to_user(
     from app.services.infrastructure.feishu import (
         send_image_to_user_sync as _feishu_send_image_sync,
     )
+    from app.services.infrastructure.feishu import (
+        send_markdown_to_user as _feishu_send_markdown,
+    )
 
     logger = logging.getLogger("promoflow.api")
     logger.info(
@@ -458,10 +493,25 @@ async def send_file_to_user(
     try:
         async with AsyncSessionLocal() as db:
             content = await get_content_orm(db, content_id)
+            content_output = _content_to_output(content)
 
         file_url = content.file_url or get_public_url(content.file_key)
         file_name = content.file_key.rsplit("/", 1)[-1]
         is_image = content.content_type == ContentType.image
+        intro_markdown = _render_download_intro_markdown(content_output)
+
+        try:
+            await _feishu_send_markdown(
+                feishu_open_id,
+                title="素材已开始准备",
+                markdown=intro_markdown,
+            )
+        except Exception:
+            logger.exception(
+                "Failed to send download intro to user %s for content %s",
+                feishu_open_id,
+                content_id,
+            )
 
         await asyncio.to_thread(
             _stream_oss_to_feishu, file_url, feishu_open_id, file_name, is_image

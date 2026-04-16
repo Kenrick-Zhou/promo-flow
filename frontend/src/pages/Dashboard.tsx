@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import MasonryGrid from '@/components/content/MasonryGrid'
 import ContentDetail from '@/components/content/ContentDetail'
 import LoadingDots from '@/components/ui/LoadingDots'
+import Toast from '@/components/ui/Toast'
 import { useContent } from '@/hooks/useContent'
 import { useSearch } from '@/hooks/useSearch'
 import type { Content, ContentType } from '@/types'
@@ -21,6 +22,7 @@ export default function Dashboard() {
   const [query, setQuery] = useState('')
   const [isSearchMode, setIsSearchMode] = useState(false)
   const [selectedContent, setSelectedContent] = useState<Content | null>(null)
+  const [showDownloadToast, setShowDownloadToast] = useState(false)
 
   useEffect(() => {
     if (isSearchMode) return
@@ -29,6 +31,20 @@ export default function Dashboard() {
       setTotal(r.total)
     })
   }, [contentType, listContents, isSearchMode])
+
+  useEffect(() => {
+    if (!showDownloadToast) {
+      return
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setShowDownloadToast(false)
+    }, 3000)
+
+    return () => {
+      window.clearTimeout(timeoutId)
+    }
+  }, [showDownloadToast])
 
   async function handleSearch(e: React.FormEvent) {
     e.preventDefault()
@@ -57,12 +73,16 @@ export default function Dashboard() {
     })
   }
 
-  function handleDownload(content: Content) {
-    recordDownload(content.id).then(() => {
+  async function handleDownload(content: Content) {
+    try {
+      await recordDownload(content.id)
       setItems((prev) =>
         prev.map((c) => (c.id === content.id ? { ...c, download_count: c.download_count + 1 } : c)),
       )
-    })
+      setShowDownloadToast(true)
+    } catch {
+      setShowDownloadToast(false)
+    }
   }
 
   const isLoading = loading || searchLoading
@@ -135,6 +155,12 @@ export default function Dashboard() {
       {selectedContent && (
         <ContentDetail content={selectedContent} onClose={() => setSelectedContent(null)} />
       )}
+
+      <Toast
+        open={showDownloadToast}
+        title="已通过方小集Bot发送"
+        description="请查看您的飞书消息"
+      />
     </div>
   )
 }
