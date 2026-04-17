@@ -1,7 +1,7 @@
 [project]
 name = "promo-flow-backend"
 version = "0.1.0"
-description = "PromoFlow 营销内容管理系统后端"
+description = "PromoFlow(方小集) 营销内容管理系统后端"
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.115.0",
@@ -20,6 +20,10 @@ dependencies = [
     "openai>=1.52.0",
     "pgvector>=0.3.5",
 ]
+
+[[tool.uv.index]]
+url = "https://mirrors.aliyun.com/pypi/simple/"
+default = true
 
 [dependency-groups]
 dev = [
