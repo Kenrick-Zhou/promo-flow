@@ -117,6 +117,10 @@ class ParsedQueryOut(BaseModel):
     must_terms: list[str]
     should_terms: list[str]
     llm_used: bool
+    sort_intent: str | None
+    time_intent: dict[str, str | int] | None
+    exclude_terms: list[str]
+    limit_intent: int | None
 
     @classmethod
     def from_domain(cls, parsed: ParsedQuery) -> ParsedQueryOut:
@@ -125,6 +129,10 @@ class ParsedQueryOut(BaseModel):
             must_terms=parsed.must_terms,
             should_terms=parsed.should_terms,
             llm_used=parsed.llm_used,
+            sort_intent=parsed.sort_intent,
+            time_intent=parsed.time_intent,
+            exclude_terms=parsed.exclude_terms,
+            limit_intent=parsed.limit_intent,
         )
 
 

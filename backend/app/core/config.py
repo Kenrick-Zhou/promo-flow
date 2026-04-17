@@ -97,6 +97,7 @@ class Settings(BaseSettings):
     SEARCH_ENABLE_LLM_RERANK: bool = False
     SEARCH_LLM_RERANK_MODEL: str = "qwen-turbo"
     SEARCH_LLM_RERANK_TOP_K: int = 10
+    SEARCH_LLM_RERANK_CANDIDATE_LIMIT: int = 30
     SEARCH_LLM_RERANK_TIMEOUT_S: int = 8
 
     # ── Search: Observability ────────────────────────────────

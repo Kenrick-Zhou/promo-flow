@@ -12,28 +12,45 @@ from app.domains.content import ContentOutput, ParsedQuery
 logger = logging.getLogger(__name__)
 
 
-def _build_candidate_text(content: ContentOutput) -> dict:
+def _build_candidate_text(
+    content: ContentOutput,
+    *,
+    initial_score: float,
+    lexical_score: float,
+    semantic_score: float,
+    matched_signals: list[str],
+) -> dict:
     """Build a compact representation of content for LLM reranking."""
     return {
         "id": content.id,
         "title": content.title or "",
         "content_type": content.content_type.value,
-        "tags": content.tags[:10],
-        "ai_keywords": content.ai_keywords[:10],
+        "tags": content.tags[:12],
+        "ai_keywords": content.ai_keywords[:15],
         "category": content.category_name or "",
-        "description": (content.description or "")[:100],
-        "ai_summary": (content.ai_summary or "")[:100],
+        "primary_category": content.primary_category_name or "",
+        "description": (content.description or "")[:180],
+        "ai_summary": (content.ai_summary or "")[:180],
+        "created_at": content.created_at,
+        "updated_at": content.updated_at,
+        "view_count": content.view_count,
+        "download_count": content.download_count,
+        "matched_signals": matched_signals[:12],
+        "lexical_score": round(lexical_score, 2),
+        "semantic_score": round(semantic_score, 2),
+        "initial_score": round(initial_score, 1),
     }
 
 
 async def rerank_with_llm(
-    candidates: list[tuple[ContentOutput, float]],
+    candidates: list[tuple[ContentOutput, float, float, float, list[str]]],
     parsed: ParsedQuery,
 ) -> list[int] | None:
     """Rerank top-K candidates using LLM.
 
     Args:
-        candidates: List of (ContentOutput, initial_score) tuples.
+        candidates: List of (ContentOutput, initial_score, lexical_score,
+            semantic_score, matched_signals) tuples.
         parsed: Parsed query for context.
 
     Returns:
@@ -44,20 +61,40 @@ async def rerank_with_llm(
     if not parsed.need_llm_rerank:
         return None
 
-    top_k = candidates[: settings.SEARCH_LLM_RERANK_TOP_K]
+    candidate_limit = settings.SEARCH_LLM_RERANK_CANDIDATE_LIMIT
+    top_k = candidates[:candidate_limit]
     if len(top_k) <= 1:
         return None
 
     candidate_data = []
-    for content, score in top_k:
-        entry = _build_candidate_text(content)
-        entry["initial_score"] = round(score, 1)
-        candidate_data.append(entry)
+    for content, score, lexical_score, semantic_score, matched_signals in top_k:
+        candidate_data.append(
+            _build_candidate_text(
+                content,
+                initial_score=score,
+                lexical_score=lexical_score,
+                semantic_score=semantic_score,
+                matched_signals=matched_signals,
+            )
+        )
+
+    sort_intent = parsed.sort_intent or "relevance"
+    time_intent = json.dumps(parsed.time_intent, ensure_ascii=False)
+    exclude_terms = "、".join(parsed.exclude_terms) if parsed.exclude_terms else "无"
+    requested_count = parsed.limit_intent or "未指定"
 
     prompt = (
         "你是一个营销素材搜索结果重排模块。\n"
         f"用户查询：{parsed.raw_query}\n\n"
-        "请从以下候选素材中，按照与用户查询的相关性从高到低重新排序。\n"
+        "请基于用户意图，对候选素材进行综合重排。\n"
+        f"显式排序意图：{sort_intent}\n"
+        f"显式时间意图：{time_intent}\n"
+        f"排除条件：{exclude_terms}\n"
+        f"用户期望返回数量：{requested_count}\n\n"
+        "重排原则：\n"
+        "1. 优先满足用户明确提出的硬约束（例如最新、只要视频、不要图片、近一个月）。\n"
+        "2. 在硬约束满足的前提下，再综合相关性、热度、下载量、匹配信号与已有分数。\n"
+        "3. 如果候选素材不满足显式约束，不要因为语义沾边就强行排到前面。\n"
         "输出格式为 JSON 数组，只包含素材 id，例如：[3, 1, 5, 2, 4]\n"
         "不要输出其他内容。\n\n"
         f"候选素材：\n{json.dumps(candidate_data, ensure_ascii=False)}"

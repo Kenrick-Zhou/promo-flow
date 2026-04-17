@@ -149,6 +149,36 @@ def _build_context_title(title: str | None) -> str:
     return title or "未命名素材"
 
 
+def _build_context_doc(result) -> str:
+    """Build rich RAG context for timestamps and ranking signals."""
+    content = result.content
+    matched_signals = (
+        "、".join(result.matched_signals[:6]) if result.matched_signals else "无"
+    )
+    return (
+        f"标题：{_build_context_title(content.title)}\n"
+        f"类型：{content.content_type.value}\n"
+        f"一级分类：{content.primary_category_name or '未提供'}\n"
+        f"分类：{content.category_name or '未提供'}\n"
+        f"创建时间：{content.created_at or '未提供'}\n"
+        f"更新时间：{content.updated_at or '未提供'}\n"
+        f"浏览量：{content.view_count}\n"
+        f"下载量：{content.download_count}\n"
+        f"标签：{'、'.join(content.tags[:8]) if content.tags else '无'}\n"
+        f"关键词：{_join_keywords(content.ai_keywords)}\n"
+        f"摘要：{content.ai_summary or content.description or '未提供'}\n"
+        f"匹配信号：{matched_signals}\n"
+        f"综合分：{result.final_score:.2f}"
+    )
+
+
+def _join_keywords(keywords: list[str]) -> str:
+    """Format a compact keyword string for bot RAG context."""
+    if not keywords:
+        return "无"
+    return "、".join(keywords[:8])
+
+
 async def handle_message_event(event: dict) -> None:
     """Handle @bot message events and respond with RAG search results."""
     message = event.get("message", {})
@@ -176,7 +206,11 @@ async def handle_message_event(event: dict) -> None:
     from app.services.infrastructure.ai import generate_rag_response
     from app.services.search import search_contents
 
-    command = SearchContentCommand(query=text, limit=5)
+    command = SearchContentCommand(
+        query=text,
+        limit=5,
+        allow_query_limit_override=True,
+    )
     async with AsyncSessionLocal() as db:
         result = await search_contents(db, command=command)
 
@@ -184,12 +218,6 @@ async def handle_message_event(event: dict) -> None:
         await send_text_to_chat(chat_id, "暂未找到相关素材，请尝试其他关键词。")
         return
 
-    context_docs = [
-        (
-            f"{_build_context_title(r.content.title)}: "
-            f"{r.content.ai_summary or r.content.description or ''}"
-        )
-        for r in result.results
-    ]
+    context_docs = [_build_context_doc(r) for r in result.results]
     answer = await generate_rag_response(text, context_docs)
     await send_text_to_chat(chat_id, answer)

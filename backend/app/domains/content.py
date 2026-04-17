@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import enum
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 # ============================================================
 # Enumerations
@@ -95,6 +95,7 @@ class SearchContentCommand:
     limit: int = 10
     content_type: str | None = None
     enable_rerank: bool | None = None
+    allow_query_limit_override: bool = False
 
 
 @dataclass(slots=True)
@@ -186,6 +187,10 @@ class ParsedQuery:
     query_embedding_text: str
     need_llm_rerank: bool
     llm_used: bool
+    sort_intent: str | None = None
+    time_intent: dict[str, str | int] | None = None
+    exclude_terms: list[str] = field(default_factory=list)
+    limit_intent: int | None = None
 
 
 @dataclass(slots=True)

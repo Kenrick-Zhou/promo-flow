@@ -136,6 +136,27 @@ def compute_business_score(
             score += s.SEARCH_SCORE_FRESHNESS_MAX
         elif age_days < 90:
             score += s.SEARCH_SCORE_FRESHNESS_MAX * 0.5
+
+        if parsed.sort_intent == "recent":
+            if age_days <= 7:
+                score += s.SEARCH_SCORE_FRESHNESS_MAX * 6
+                signals.append("sort_recent:7d")
+            elif age_days <= 30:
+                score += s.SEARCH_SCORE_FRESHNESS_MAX * 4
+                signals.append("sort_recent:30d")
+            elif age_days <= 90:
+                score += s.SEARCH_SCORE_FRESHNESS_MAX * 2
+                signals.append("sort_recent:90d")
+
+        if parsed.time_intent and parsed.time_intent.get("type") == "relative_days":
+            limit_days = parsed.time_intent.get("days")
+            if isinstance(limit_days, int):
+                if age_days <= limit_days:
+                    score += s.SEARCH_SCORE_FRESHNESS_MAX * 2
+                    signals.append(f"time_window:{limit_days}d")
+                else:
+                    score *= 0.6
+                    signals.append(f"time_window_miss:{limit_days}d")
     except (ValueError, TypeError):
         pass
 

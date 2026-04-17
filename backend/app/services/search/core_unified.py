@@ -107,8 +107,16 @@ async def search_contents(
             query_embedding_text=parsed.query_embedding_text,
             need_llm_rerank=parsed.need_llm_rerank,
             llm_used=parsed.llm_used,
+            sort_intent=parsed.sort_intent,
+            time_intent=parsed.time_intent,
+            exclude_terms=parsed.exclude_terms,
+            limit_intent=parsed.limit_intent,
         )
     query_parse_ms = _ms_since(t0)
+
+    final_limit = command.limit
+    if command.allow_query_limit_override and parsed.limit_intent is not None:
+        final_limit = max(parsed.limit_intent, 1)
 
     # ── 2. Generate embedding ────────────────────────────────
     t0 = time.monotonic()
@@ -217,7 +225,7 @@ async def search_contents(
     llm_rerank_ms: float | None = None
     reranked = False
 
-    top_for_rerank = [(c, s) for c, s, _, _, _ in scored]
+    top_for_rerank = [(c, s, lx, sm, sig) for c, s, lx, sm, sig in scored]
     reranked_ids = await rerank_with_llm(top_for_rerank, parsed)
 
     if reranked_ids is not None:
@@ -246,7 +254,7 @@ async def search_contents(
     # ── 8. Build results ─────────────────────────────────────
     results: list[SearchResultOutput] = []
     for content_output, final_score, lexical_score, semantic_score, signals in scored[
-        : command.limit
+        :final_limit
     ]:
         results.append(
             SearchResultOutput(
