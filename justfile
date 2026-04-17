@@ -67,6 +67,10 @@ be-lint:
     cd backend && uv run ruff check --fix app
     cd backend && uv run mypy app
 
+# 后端依赖检查（扫描源码 import，确保生产依赖未遗漏）
+be-deps-check:
+    cd backend && uv run python ../scripts/check_backend_dependencies.py
+
 # ============================================================
 # 前端（frontend/）
 # ============================================================
@@ -132,8 +136,9 @@ cloc:
 # 运行所有测试
 test: be-test
 
-# 完整检查：pre-commit + 后端测试
+# 完整检查：依赖审计 + pre-commit + 后端测试
 check:
+    just be-deps-check
     pre-commit run --all-files
     cd backend && uv run pytest -n 8
 

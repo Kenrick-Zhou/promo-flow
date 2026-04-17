@@ -19,6 +19,11 @@ dependencies = [
     "dashscope>=1.20.11",
     "openai>=1.52.0",
     "pgvector>=0.3.5",
+    "apscheduler<4",
+    "python-dotenv>=1.2.2",
+    "jinja2>=3.1.6",
+    "lark-oapi>=1.5.3",
+    "starlette>=1.0.0",
 ]
 
 [[tool.uv.index]]
@@ -31,6 +36,7 @@ dev = [
     "pytest-asyncio>=0.24.0",
     "httpx>=0.27.2",
     "pre-commit>=4.5.1",
+    "pytest-xdist>=3.8.0",
 ]
 
 [tool.black]
