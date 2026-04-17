@@ -1,17 +1,21 @@
 import uuid
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
 import pytest_asyncio
 from httpx import AsyncClient
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_user
-from app.domains.content import ContentStatus, ContentType, UserRole
+from app.domains.content import ContentStatus, ContentType, ParsedQuery, UserRole
 from app.main import app
 from app.models.category import Category
 from app.models.content import Content
 from app.models.user import User
 from app.services.infrastructure.storage import get_public_url
+from app.services.search.retriever import RecallItem, _recall_fts_zhparser
 from tests.conftest import TEST_PREFIX
 
 _RUN = uuid.uuid4().hex[:8]
@@ -173,3 +177,78 @@ async def test_semantic_search_orders_by_similarity(
     assert ids_1 != ids_2
     assert ids_1[0] == content_a.id
     assert ids_2[0] == content_b.id
+
+
+@pytest.mark.asyncio
+async def test_recall_fts_falls_back_to_ilike_when_zhparser_config_missing(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    parsed = ParsedQuery(
+        raw_query="礼炮",
+        normalized_query="礼炮",
+        parsed_content_type=None,
+        must_terms=[],
+        should_terms=["礼炮"],
+        query_embedding_text="礼炮",
+        need_llm_rerank=False,
+        llm_used=False,
+    )
+
+    db = SimpleNamespace(
+        rollback=AsyncMock(),
+        execute=AsyncMock(
+            side_effect=DBAPIError(
+                statement="SELECT 1",
+                params={},
+                orig=RuntimeError(
+                    'text search configuration "zhparser" does not exist'
+                ),
+            )
+        ),
+    )
+
+    fallback_items = [RecallItem(content_id=123, score=1.0)]
+
+    async def fake_ilike(*args, **kwargs):
+        return fallback_items
+
+    monkeypatch.setattr("app.services.search.retriever._recall_fts_ilike", fake_ilike)
+
+    result = await _recall_fts_zhparser(db, query_text="礼炮", parsed=parsed)
+
+    assert result == fallback_items
+
+
+@pytest.mark.asyncio
+async def test_recall_fts_raises_unrelated_db_errors(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    parsed = ParsedQuery(
+        raw_query="礼炮",
+        normalized_query="礼炮",
+        parsed_content_type=None,
+        must_terms=[],
+        should_terms=["礼炮"],
+        query_embedding_text="礼炮",
+        need_llm_rerank=False,
+        llm_used=False,
+    )
+
+    db = SimpleNamespace(
+        rollback=AsyncMock(),
+        execute=AsyncMock(
+            side_effect=DBAPIError(
+                statement="SELECT 1",
+                params={},
+                orig=RuntimeError("some other database error"),
+            )
+        ),
+    )
+
+    async def fake_ilike(*args, **kwargs):
+        raise AssertionError("ILIKE fallback should not run for unrelated errors")
+
+    monkeypatch.setattr("app.services.search.retriever._recall_fts_ilike", fake_ilike)
+
+    with pytest.raises(DBAPIError):
+        await _recall_fts_zhparser(db, query_text="礼炮", parsed=parsed)

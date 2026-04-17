@@ -139,7 +139,8 @@ async def _llm_parse_query(query: str) -> dict | None:
                 model=settings.SEARCH_LLM_QUERY_PARSE_MODEL,
                 messages=[{"role": "user", "content": prompt}],
                 response_format={"type": "json_object"},
-                max_tokens=256,
+                max_tokens=512,
+                extra_body={"enable_thinking": False},
             ),
             timeout=settings.SEARCH_LLM_QUERY_PARSE_TIMEOUT_S,
         )

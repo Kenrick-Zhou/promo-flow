@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 
 from sqlalchemy import select, text
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.domains.content import ContentStatus, ParsedQuery
 from app.models.content import Content
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
@@ -61,7 +65,7 @@ async def recall_fts(
     query_text: str,
     parsed: ParsedQuery,
 ) -> list[RecallItem]:
-    """Recall by full-text search (zhparser or ILIKE fallback)."""
+    """Recall by PostgreSQL FTS or ILIKE fallback."""
     if not query_text.strip():
         return []
 
@@ -76,11 +80,13 @@ async def _recall_fts_zhparser(
     query_text: str,
     parsed: ParsedQuery,
 ) -> list[RecallItem]:
-    """FTS recall using PostgreSQL zhparser."""
+    """FTS recall using a configured PostgreSQL text search config."""
+    ts_config = settings.SEARCH_FTS_ZH_TSCONFIG
     type_clause = ""
     params: dict[str, object] = {
         "query": query_text,
         "limit": settings.SEARCH_FTS_RECALL_LIMIT,
+        "ts_config": ts_config,
     }
 
     if parsed.parsed_content_type:
@@ -91,24 +97,45 @@ async def _recall_fts_zhparser(
         f"""
         SELECT id,
                ts_rank_cd(
-                   to_tsvector('zhparser', search_document),
-                   plainto_tsquery('zhparser', :query)
+                   to_tsvector(CAST(:ts_config AS regconfig), search_document),
+                   plainto_tsquery(CAST(:ts_config AS regconfig), :query)
                ) AS fts_rank
         FROM contents
         WHERE status = 'approved'
           AND search_document IS NOT NULL
-          AND to_tsvector('zhparser', search_document)
-              @@ plainto_tsquery('zhparser', :query)
+          AND to_tsvector(CAST(:ts_config AS regconfig), search_document)
+              @@ plainto_tsquery(CAST(:ts_config AS regconfig), :query)
           {type_clause}
         ORDER BY fts_rank DESC
         LIMIT :limit
     """
     )
 
-    result = await db.execute(sql, params)
+    try:
+        result = await db.execute(sql, params)
+    except DBAPIError as exc:
+        if _is_missing_text_search_config_error(exc):
+            await db.rollback()
+            logger.warning(
+                "PostgreSQL FTS config '%s' unavailable; falling back to ILIKE",
+                ts_config,
+            )
+            return await _recall_fts_ilike(db, query_text=query_text, parsed=parsed)
+        raise
+
     return [
         RecallItem(content_id=row.id, score=float(row.fts_rank)) for row in result.all()
     ]
+
+
+def _is_missing_text_search_config_error(exc: DBAPIError) -> bool:
+    """Return True when the configured PostgreSQL text search config is unavailable."""
+    message_parts = [str(exc)]
+    if getattr(exc, "orig", None) is not None:
+        message_parts.append(str(exc.orig))
+
+    message = "\n".join(message_parts).lower()
+    return "text search configuration" in message and "does not exist" in message
 
 
 async def _recall_fts_ilike(

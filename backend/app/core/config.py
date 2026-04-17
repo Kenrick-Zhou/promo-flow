@@ -75,6 +75,7 @@ class Settings(BaseSettings):
     SEARCH_TAG_RECALL_LIMIT: int = 30
     SEARCH_RRF_K: int = 60
     SEARCH_FTS_BACKEND: str = "ilike"  # "zhparser" | "ilike"
+    SEARCH_FTS_ZH_TSCONFIG: str = "zhparser"  # e.g. zhcfg
 
     # ── Search: Business Scoring ─────────────────────────────
     SEARCH_SCORE_CONTENT_TYPE_MATCH: float = 80

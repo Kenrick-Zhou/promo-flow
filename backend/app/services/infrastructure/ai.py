@@ -284,6 +284,6 @@ async def generate_rag_response(query: str, context_docs: list[str]) -> str:
     response = await _dashscope_compat.chat.completions.create(
         model=settings.DASHSCOPE_RAG_MODEL,
         messages=messages,  # type: ignore[arg-type]
-        max_tokens=512,
+        max_tokens=1024,
     )
     return response.choices[0].message.content or ""

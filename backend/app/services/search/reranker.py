@@ -70,7 +70,8 @@ async def rerank_with_llm(
             _dashscope_compat.chat.completions.create(
                 model=settings.SEARCH_LLM_RERANK_MODEL,
                 messages=[{"role": "user", "content": prompt}],
-                max_tokens=256,
+                max_tokens=512,
+                extra_body={"enable_thinking": False},
             ),
             timeout=settings.SEARCH_LLM_RERANK_TIMEOUT_S,
         )
