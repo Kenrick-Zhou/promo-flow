@@ -155,5 +155,9 @@ async def get_media_dimensions(
                 return dims
 
     except Exception:
-        logger.warning("Failed to get media dimensions for %s", file_url, exc_info=True)
+        logger.warning(
+            "Failed to get media dimensions for content_type=%s",
+            content_type,
+            exc_info=True,
+        )
     return None

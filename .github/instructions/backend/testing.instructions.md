@@ -91,6 +91,7 @@ def _n(name: str) -> str:
 - **Unauthenticated requests return `401`** (not `403`). `HTTPBearer` returns 403 in older Starlette but the app's custom HTTPException handler normalizes to 401 for missing credentials. Always test unauthenticated cases against `401`.
 - Mock external calls via `respx`/`pytest-mock`; avoid real network requests.
 - Mock AI services (DashScope, OpenAI) and OSS storage in tests.
+- When adding or changing logging/observability behavior, include at least one regression test that verifies the emitted log remains visible through the configured application logger chain and preserves structured JSON output / masking guarantees.
 
 ## Test Organization
 - Mirror the app package structure under `tests/`:

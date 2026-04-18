@@ -1,3 +1,4 @@
+import json
 import uuid
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
@@ -16,6 +17,7 @@ from app.domains.content import (
     ContentType,
     ParsedQuery,
     SearchContentCommand,
+    SearchTimingOutput,
     UserRole,
 )
 from app.main import app
@@ -23,7 +25,7 @@ from app.models.category import Category
 from app.models.content import Content
 from app.models.user import User
 from app.services.infrastructure.storage import get_public_url
-from app.services.search.core_unified import search_contents
+from app.services.search.core_unified import _log_timing, search_contents
 from app.services.search.query_parser import parse_query_rules
 from app.services.search.ranker import compute_business_score
 from app.services.search.retriever import RecallItem, _recall_fts_zhparser
@@ -369,6 +371,40 @@ def test_recent_sort_intent_boosts_fresh_content() -> None:
     assert fresh_score > stale_score
     assert any(signal.startswith("sort_recent:") for signal in fresh_signals)
     assert "time_window_miss:30d" in stale_signals
+
+
+def test_search_timing_is_logged_even_when_debug_timing_is_disabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "app.services.search.core_unified.settings.SEARCH_DEBUG_TIMING",
+        False,
+        raising=False,
+    )
+
+    timing = SearchTimingOutput(
+        query_parse_ms=1.0,
+        vector_recall_ms=2.0,
+        fts_recall_ms=3.0,
+        tag_recall_ms=4.0,
+        rrf_merge_ms=5.0,
+        scoring_ms=6.0,
+        llm_rerank_ms=None,
+        total_ms=7.0,
+    )
+
+    logged_messages: list[str] = []
+
+    def fake_info(message: str) -> None:
+        logged_messages.append(message)
+
+    monkeypatch.setattr("app.services.search.core_unified.logger.info", fake_info)
+
+    _log_timing(timing)
+
+    assert logged_messages
+    payload = json.loads(logged_messages[0])
+    assert payload["message"] == "search_timing"
 
 
 @pytest.mark.asyncio

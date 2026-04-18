@@ -9,12 +9,15 @@ from sqlalchemy import text
 
 from app.bot.router import router as bot_router
 from app.core.config import settings
+from app.core.logging import configure_logging
 from app.core.middleware import RequestIdMiddleware, register_exception_handlers
 from app.db.session import engine
 from app.routers.router import router as api_router
 from app.workers.hot_score import refresh_all_hot_scores
 
 scheduler = AsyncIOScheduler()
+
+configure_logging()
 
 
 @asynccontextmanager

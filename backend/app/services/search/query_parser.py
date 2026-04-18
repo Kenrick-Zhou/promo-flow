@@ -8,6 +8,7 @@ import logging
 import re
 
 from app.core.config import settings
+from app.core.logging import fingerprint_text
 from app.domains.content import ParsedQuery
 from app.services.search.dictionaries.content_type import CONTENT_TYPE_KEYWORD_MAP
 from app.services.search.dictionaries.stopwords import STOPWORDS
@@ -279,10 +280,19 @@ async def _llm_parse_query(query: str) -> dict | None:
         result: dict = json.loads(text)  # type: ignore[assignment]
         return result
     except TimeoutError:
-        logger.warning("LLM query parse timed out for query: %s", query)
+        logger.warning(
+            "LLM query parse timed out query_fp=%s query_len=%d",
+            fingerprint_text(query),
+            len(query),
+        )
         return None
     except Exception:
-        logger.warning("LLM query parse failed for query: %s", query, exc_info=True)
+        logger.warning(
+            "LLM query parse failed query_fp=%s query_len=%d",
+            fingerprint_text(query),
+            len(query),
+            exc_info=True,
+        )
         return None
 
 

@@ -39,6 +39,7 @@ applyTo: "backend/app/services/**/*.py"
 - **Infrastructure exception conversion**: Catch infrastructure exceptions (e.g., `httpx.HTTPError`, `OSSError`) within service functions and convert to domain exceptions. Domain `errors.py` must not import from infrastructure.
 - Prefer stable, documented `error_code` values for domain errors to aid client handling and observability.
 - External calls (e.g., httpx) must have timeouts; add retries as needed.
+- Service logs must stay on the configured application logger hierarchy and must not depend on root logger defaults for visibility. Use structured logging output and central masking helpers when recording identifiers or user-provided text.
 - Testing: Every new service method requires corresponding unit tests with positive and negative cases. Tests currently live as flat files under `tests/` (e.g., `tests/test_content.py`); new test files should follow this pattern until the layout is explicitly migrated to mirrored sub-packages.
 
 ## AI and Content Analysis

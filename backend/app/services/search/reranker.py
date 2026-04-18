@@ -7,6 +7,7 @@ import json
 import logging
 
 from app.core.config import settings
+from app.core.logging import fingerprint_text
 from app.domains.content import ContentOutput, ParsedQuery
 
 logger = logging.getLogger(__name__)
@@ -121,10 +122,17 @@ async def rerank_with_llm(
         logger.warning("LLM rerank returned invalid format: %s", text)
         return None
     except TimeoutError:
-        logger.warning("LLM rerank timed out for query: %s", parsed.raw_query)
+        logger.warning(
+            "LLM rerank timed out query_fp=%s query_len=%d",
+            fingerprint_text(parsed.raw_query),
+            len(parsed.raw_query),
+        )
         return None
     except Exception:
         logger.warning(
-            "LLM rerank failed for query: %s", parsed.raw_query, exc_info=True
+            "LLM rerank failed query_fp=%s query_len=%d",
+            fingerprint_text(parsed.raw_query),
+            len(parsed.raw_query),
+            exc_info=True,
         )
         return None

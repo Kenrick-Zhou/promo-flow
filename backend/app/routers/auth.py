@@ -29,12 +29,7 @@ async def feishu_login_url(request: Request):
         }
     )
     url = f"https://accounts.feishu.cn/open-apis/authen/v1/authorize?{params}"
-    logger.info(
-        "[auth/login] 生成 OAuth URL | client_id=%s | redirect_uri=%s | url=%s",
-        settings.FEISHU_APP_ID,
-        settings.FEISHU_REDIRECT_URI,
-        url,
-    )
+    logger.info("[auth/login] 生成 OAuth URL")
     return {"authorization_url": url}
 
 
@@ -44,10 +39,7 @@ async def feishu_callback(
     db: AsyncSession = Depends(get_db),
 ) -> TokenOut:
     """Handle Feishu OAuth callback and return JWT."""
-    logger.info(
-        "[auth/callback] 收到 OAuth 回调 | code=%s...",
-        code[:10] if len(code) > 10 else code,
-    )
+    logger.info("[auth/callback] 收到 OAuth 回调 | code_len=%d", len(code))
     try:
         session = await login_with_code(
             db,

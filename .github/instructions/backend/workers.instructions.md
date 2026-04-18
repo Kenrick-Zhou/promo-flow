@@ -14,5 +14,6 @@ applyTo: "backend/app/workers/*.py"
 ## Guidelines
 - Keep tasks idempotent: re-running with the same input should produce the same result.
 - Handle failures gracefully; log errors with context (content_id, task type).
+- Worker logs must go through the configured application logger hierarchy (`app.*` / `promoflow.api`) so scheduled jobs keep `INFO`-level visibility outside request scope.
 - For CPU-bound or long-blocking operations, wrap with `run_in_threadpool()`.
 - If the project scales beyond what BackgroundTasks supports, consider migrating to Celery or ARQ with Redis.

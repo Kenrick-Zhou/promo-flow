@@ -14,6 +14,9 @@ applyTo: "backend/app/core/*.py, backend/app/routers/auth.py, backend/app/router
 
 ## Logging
 - Use structured JSON logging; avoid sensitive output (tokens, keys, credentials).
+- Centralize handler/formatter installation in `backend/app/core/logging.py`; initialize it during app startup. Never rely on the root logger or Python's default `lastResort` handler for application `INFO` logs.
+- Application modules must log through the `app.*` hierarchy (prefer `logging.getLogger(__name__)`) or the shared `promoflow.api` logger so configured handlers always apply.
 - Log payload fields include: `timestamp`, `level`, `logger`, `message`, plus contextual fields when present: `request_id`, `status_code`, `method`, `path`, `duration_ms`, `error_code`, and `exc_info` for exceptions.
+- Prefer centralized sanitization/masking helpers for IDs and free-form user input. Log fingerprints, lengths, counts, or masked identifiers instead of raw OAuth codes, user queries, chat IDs, URLs, file keys, or other sensitive values.
 - Severity: record `4xx` as warnings; record `5xx` and unexpected errors as exceptions (stack traces included).
 - For external calls (Feishu API, OSS, LLM), log request ID, latency, and status; include exception types and context on errors.

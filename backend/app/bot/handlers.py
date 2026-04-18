@@ -9,6 +9,7 @@ import time
 
 import httpx
 
+from app.core.logging import fingerprint_text, mask_identifier
 from app.services.infrastructure.feishu import send_text_to_chat
 
 logger = logging.getLogger("promoflow.api")
@@ -30,10 +31,15 @@ async def register_group_chat(chat_id: str, chat_name: str | None) -> None:
             db.add(FeishuGroupChat(chat_id=chat_id, chat_name=chat_name))
             await db.commit()
             logger.info(
-                "Bot added to group chat: chat_id=%s name=%s", chat_id, chat_name
+                "Bot added to group chat: chat_id=%s name=%s",
+                mask_identifier(chat_id),
+                chat_name,
             )
         else:
-            logger.info("Bot re-added to known group chat: chat_id=%s", chat_id)
+            logger.info(
+                "Bot re-added to known group chat: chat_id=%s",
+                mask_identifier(chat_id),
+            )
 
 
 async def unregister_group_chat(chat_id: str) -> None:
@@ -46,7 +52,9 @@ async def unregister_group_chat(chat_id: str) -> None:
         if existing is not None:
             await db.delete(existing)
             await db.commit()
-            logger.info("Bot removed from group chat: chat_id=%s", chat_id)
+            logger.info(
+                "Bot removed from group chat: chat_id=%s", mask_identifier(chat_id)
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -203,10 +211,11 @@ async def handle_message_event(event: dict) -> None:
         return
 
     logger.info(
-        "bot_message_received chat_id=%s message_type=%s text=%s",
-        chat_id,
+        "bot_message_received chat_id=%s message_type=%s text_fp=%s text_len=%d",
+        mask_identifier(chat_id),
         msg_type,
-        text[:120],
+        fingerprint_text(text),
+        len(text),
     )
 
     # Perform unified search and reply
@@ -225,7 +234,7 @@ async def handle_message_event(event: dict) -> None:
         result = await search_contents(db, command=command)
     logger.info(
         "bot_search_done chat_id=%s results=%d duration_ms=%.1f",
-        chat_id,
+        mask_identifier(chat_id),
         len(result.results),
         (time.monotonic() - search_start) * 1000,
     )
@@ -234,7 +243,7 @@ async def handle_message_event(event: dict) -> None:
         await send_text_to_chat(chat_id, "暂未找到相关素材，请尝试其他关键词。")
         logger.info(
             "bot_reply_sent chat_id=%s results=0 total_ms=%.1f",
-            chat_id,
+            mask_identifier(chat_id),
             (time.monotonic() - total_start) * 1000,
         )
         return
@@ -244,14 +253,14 @@ async def handle_message_event(event: dict) -> None:
     answer = await generate_rag_response(text, context_docs)
     logger.info(
         "bot_answer_ready chat_id=%s duration_ms=%.1f",
-        chat_id,
+        mask_identifier(chat_id),
         (time.monotonic() - rag_start) * 1000,
     )
     send_start = time.monotonic()
     await send_text_to_chat(chat_id, answer)
     logger.info(
         "bot_reply_sent chat_id=%s answer_len=%d send_ms=%.1f total_ms=%.1f",
-        chat_id,
+        mask_identifier(chat_id),
         len(answer),
         (time.monotonic() - send_start) * 1000,
         (time.monotonic() - total_start) * 1000,

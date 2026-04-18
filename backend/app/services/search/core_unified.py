@@ -5,8 +5,10 @@ Orchestrates query understanding, multi-path recall, scoring, and reranking.
 
 from __future__ import annotations
 
+import json
 import logging
 import time
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -288,17 +290,20 @@ async def search_contents(
 
 def _log_timing(timing: SearchTimingOutput) -> None:
     """Log structured timing data."""
-    if not settings.SEARCH_DEBUG_TIMING:
-        return
+    payload = {
+        "timestamp": datetime.now(UTC).isoformat(),
+        "level": "INFO",
+        "logger": logger.name,
+        "message": "search_timing",
+        "query_parse_ms": timing.query_parse_ms,
+        "vector_recall_ms": timing.vector_recall_ms,
+        "fts_recall_ms": timing.fts_recall_ms,
+        "tag_recall_ms": timing.tag_recall_ms,
+        "rrf_merge_ms": timing.rrf_merge_ms,
+        "scoring_ms": timing.scoring_ms,
+        "llm_rerank_ms": timing.llm_rerank_ms,
+        "total_ms": timing.total_ms,
+    }
     logger.info(
-        "search_timing query_parse=%.1fms vector=%.1fms fts=%.1fms "
-        "tag=%.1fms rrf=%.1fms scoring=%.1fms rerank=%s total=%.1fms",
-        timing.query_parse_ms,
-        timing.vector_recall_ms,
-        timing.fts_recall_ms,
-        timing.tag_recall_ms,
-        timing.rrf_merge_ms,
-        timing.scoring_ms,
-        f"{timing.llm_rerank_ms:.1f}ms" if timing.llm_rerank_ms is not None else "N/A",
-        timing.total_ms,
+        json.dumps(payload, ensure_ascii=False),
     )

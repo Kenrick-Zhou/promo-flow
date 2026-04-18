@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
 from app.core.config import settings
+from app.core.logging import fingerprint_text
 from app.prompts import render
 
 logger = logging.getLogger("promoflow.api")
@@ -297,10 +298,11 @@ async def generate_rag_response(query: str, context_docs: list[str]) -> str:
         },
     ]
     logger.info(
-        "bot_rag_start model=%s context_docs=%d query=%s",
+        "bot_rag_start model=%s context_docs=%d query_fp=%s query_len=%d",
         settings.DASHSCOPE_RAG_MODEL,
         len(context_docs),
-        query[:80],
+        fingerprint_text(query),
+        len(query),
     )
     try:
         response = await asyncio.wait_for(
