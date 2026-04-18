@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import tempfile
+import time
 
 import httpx
 
@@ -181,6 +182,7 @@ def _join_keywords(keywords: list[str]) -> str:
 
 async def handle_message_event(event: dict) -> None:
     """Handle @bot message events and respond with RAG search results."""
+    total_start = time.monotonic()
     message = event.get("message", {})
     chat_id = message.get("chat_id", "")
     msg_type = message.get("message_type", "")
@@ -200,6 +202,13 @@ async def handle_message_event(event: dict) -> None:
     if not text:
         return
 
+    logger.info(
+        "bot_message_received chat_id=%s message_type=%s text=%s",
+        chat_id,
+        msg_type,
+        text[:120],
+    )
+
     # Perform unified search and reply
     from app.db.session import AsyncSessionLocal
     from app.domains.content import SearchContentCommand
@@ -211,13 +220,39 @@ async def handle_message_event(event: dict) -> None:
         limit=5,
         allow_query_limit_override=True,
     )
+    search_start = time.monotonic()
     async with AsyncSessionLocal() as db:
         result = await search_contents(db, command=command)
+    logger.info(
+        "bot_search_done chat_id=%s results=%d duration_ms=%.1f",
+        chat_id,
+        len(result.results),
+        (time.monotonic() - search_start) * 1000,
+    )
 
     if not result.results:
         await send_text_to_chat(chat_id, "暂未找到相关素材，请尝试其他关键词。")
+        logger.info(
+            "bot_reply_sent chat_id=%s results=0 total_ms=%.1f",
+            chat_id,
+            (time.monotonic() - total_start) * 1000,
+        )
         return
 
     context_docs = [_build_context_doc(r) for r in result.results]
+    rag_start = time.monotonic()
     answer = await generate_rag_response(text, context_docs)
+    logger.info(
+        "bot_answer_ready chat_id=%s duration_ms=%.1f",
+        chat_id,
+        (time.monotonic() - rag_start) * 1000,
+    )
+    send_start = time.monotonic()
     await send_text_to_chat(chat_id, answer)
+    logger.info(
+        "bot_reply_sent chat_id=%s answer_len=%d send_ms=%.1f total_ms=%.1f",
+        chat_id,
+        len(answer),
+        (time.monotonic() - send_start) * 1000,
+        (time.monotonic() - total_start) * 1000,
+    )

@@ -288,6 +288,8 @@ async def search_contents(
 
 def _log_timing(timing: SearchTimingOutput) -> None:
     """Log structured timing data."""
+    if not settings.SEARCH_DEBUG_TIMING:
+        return
     logger.info(
         "search_timing query_parse=%.1fms vector=%.1fms fts=%.1fms "
         "tag=%.1fms rrf=%.1fms scoring=%.1fms rerank=%s total=%.1fms",

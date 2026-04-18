@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
+import logging
 import re
+import time
 from typing import Any, TypedDict, cast
 
 import dashscope
@@ -14,6 +17,17 @@ from starlette.concurrency import run_in_threadpool
 
 from app.core.config import settings
 from app.prompts import render
+
+logger = logging.getLogger("promoflow.api")
+
+_RAG_TIMEOUT_MESSAGE = (
+    "已找到相关素材，但生成自然语言回复超时。"
+    "请稍后重试，或改用 Web 界面查看搜索结果。"
+)
+_RAG_FAILURE_MESSAGE = (
+    "已找到相关素材，但生成自然语言回复失败。"
+    "请稍后重试，或改用 Web 界面查看搜索结果。"
+)
 
 dashscope.api_key = settings.DASHSCOPE_API_KEY
 
@@ -272,6 +286,7 @@ async def generate_embedding(text: str) -> list[float]:
 
 async def generate_rag_response(query: str, context_docs: list[str]) -> str:
     """Generate a natural language response using retrieved contexts (RAG)."""
+    start = time.monotonic()
     context = "\n\n".join(f"[{i + 1}] {doc}" for i, doc in enumerate(context_docs))
     system_prompt = render("rag_system.j2")
     messages = [
@@ -281,9 +296,38 @@ async def generate_rag_response(query: str, context_docs: list[str]) -> str:
             "content": f"相关素材信息：\n{context}\n\n用户问题：{query}",
         },
     ]
-    response = await _dashscope_compat.chat.completions.create(
-        model=settings.DASHSCOPE_RAG_MODEL,
-        messages=messages,  # type: ignore[arg-type]
-        max_tokens=1024,
+    logger.info(
+        "bot_rag_start model=%s context_docs=%d query=%s",
+        settings.DASHSCOPE_RAG_MODEL,
+        len(context_docs),
+        query[:80],
     )
-    return response.choices[0].message.content or ""
+    try:
+        response = await asyncio.wait_for(
+            _dashscope_compat.chat.completions.create(
+                model=settings.DASHSCOPE_RAG_MODEL,
+                messages=messages,  # type: ignore[arg-type]
+                max_tokens=1024,
+            ),
+            timeout=settings.DASHSCOPE_RAG_TIMEOUT_S,
+        )
+        logger.info(
+            "bot_rag_done duration_ms=%.1f model=%s",
+            (time.monotonic() - start) * 1000,
+            settings.DASHSCOPE_RAG_MODEL,
+        )
+        return response.choices[0].message.content or ""
+    except TimeoutError:
+        logger.warning(
+            "bot_rag_timeout duration_ms=%.1f model=%s",
+            (time.monotonic() - start) * 1000,
+            settings.DASHSCOPE_RAG_MODEL,
+        )
+        return _RAG_TIMEOUT_MESSAGE
+    except Exception:
+        logger.exception(
+            "bot_rag_failed duration_ms=%.1f model=%s",
+            (time.monotonic() - start) * 1000,
+            settings.DASHSCOPE_RAG_MODEL,
+        )
+        return _RAG_FAILURE_MESSAGE

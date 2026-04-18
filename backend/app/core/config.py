@@ -60,6 +60,7 @@ class Settings(BaseSettings):
     DASHSCOPE_VISION_MODEL: str = "qwen-vl-plus"
     DASHSCOPE_EMBEDDING_MODEL: str = "text-embedding-v3"
     DASHSCOPE_RAG_MODEL: str = "qwen3.5-flash"
+    DASHSCOPE_RAG_TIMEOUT_S: int = 20
 
     # CORS
     CORS_ORIGINS: list[str] = ["http://localhost:5173", "http://localhost:3000"]
