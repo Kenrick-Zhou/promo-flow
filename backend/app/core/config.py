@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import os
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
+from dotenv import dotenv_values
 from pydantic_settings import (
     BaseSettings,
     PydanticBaseSettingsSource,
@@ -12,6 +14,18 @@ from pydantic_settings import (
 
 # Mono-repo: .env lives at project root (one level above backend/)
 _ENV_FILE = Path(__file__).resolve().parents[3] / ".env"
+
+
+def _should_prefer_dotenv() -> bool:
+    runtime_app_env = os.getenv("APP_ENV")
+    if runtime_app_env and runtime_app_env != "development":
+        return False
+
+    if not _ENV_FILE.exists():
+        return False
+
+    env_values = dotenv_values(_ENV_FILE)
+    return env_values.get("APP_ENV") == "development"
 
 
 class Settings(BaseSettings):
@@ -26,7 +40,16 @@ class Settings(BaseSettings):
         dotenv_settings: PydanticBaseSettingsSource,
         file_secret_settings: PydanticBaseSettingsSource,
     ) -> tuple[PydanticBaseSettingsSource, ...]:
-        # 优先使用运行时环境变量，便于容器/生产部署覆盖本地 .env 默认值
+        # 本地开发（.env 里标记为 development）优先使用 .env；
+        # 其他环境保持运行时环境变量优先。
+        if _should_prefer_dotenv():
+            return (
+                init_settings,
+                dotenv_settings,
+                env_settings,
+                file_secret_settings,
+            )
+
         return (
             init_settings,
             env_settings,

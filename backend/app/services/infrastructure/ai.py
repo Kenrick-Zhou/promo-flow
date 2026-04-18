@@ -308,6 +308,7 @@ async def generate_rag_response(query: str, context_docs: list[str]) -> str:
                 model=settings.DASHSCOPE_RAG_MODEL,
                 messages=messages,  # type: ignore[arg-type]
                 max_tokens=1024,
+                extra_body={"enable_thinking": False},
             ),
             timeout=settings.DASHSCOPE_RAG_TIMEOUT_S,
         )
