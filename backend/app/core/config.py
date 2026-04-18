@@ -26,11 +26,11 @@ class Settings(BaseSettings):
         dotenv_settings: PydanticBaseSettingsSource,
         file_secret_settings: PydanticBaseSettingsSource,
     ) -> tuple[PydanticBaseSettingsSource, ...]:
-        # .env 文件优先级高于 shell 环境变量
+        # 优先使用运行时环境变量，便于容器/生产部署覆盖本地 .env 默认值
         return (
             init_settings,
-            dotenv_settings,
             env_settings,
+            dotenv_settings,
             file_secret_settings,
         )
 
