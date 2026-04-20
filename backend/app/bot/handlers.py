@@ -6,13 +6,18 @@ import asyncio
 import logging
 import tempfile
 import time
+from collections.abc import Sequence
 
 import httpx
 
 from app.core.logging import fingerprint_text, mask_identifier
+from app.domains.content import SearchResultOutput
 from app.services.infrastructure.feishu import send_text_to_chat
 
 logger = logging.getLogger("promoflow.api")
+
+_FILE_DELIVERY_NOTE = "我会继续逐个发送对应素材的说明与文件，请注意查收。"
+_GROUP_FILE_DELIVERY_NOTE = "我会继续通过私信逐个发送对应素材的说明与文件，请注意查收。"
 
 
 # ---------------------------------------------------------------------------
@@ -188,12 +193,80 @@ def _join_keywords(keywords: list[str]) -> str:
     return "、".join(keywords[:8])
 
 
+def _append_file_delivery_note(answer: str) -> str:
+    """Ensure the bot reply explicitly mentions follow-up file delivery."""
+    stripped = answer.strip()
+    if not stripped:
+        return _FILE_DELIVERY_NOTE
+    normalized = stripped.replace("素材文件", "文件").replace("当前会话", "")
+    if _FILE_DELIVERY_NOTE in stripped or all(
+        phrase in normalized for phrase in ("发送", "查收")
+    ):
+        return stripped
+    return f"{stripped}\n\n---\n{_FILE_DELIVERY_NOTE}"
+
+
+def _resolve_file_delivery_note(chat_type: str | None) -> str:
+    """Build the user-facing file delivery note for the current chat scene."""
+    if chat_type == "group":
+        return _GROUP_FILE_DELIVERY_NOTE
+    return _FILE_DELIVERY_NOTE
+
+
+async def _send_related_files_to_user(
+    feishu_open_id: str,
+    results: Sequence[SearchResultOutput],
+) -> None:
+    """Reuse the user download flow so each file is preceded by its intro card."""
+    from app.services.content.core import send_file_to_user
+
+    for result in results:
+        content_id = result.content.id
+        logger.info(
+            "bot_related_file_prepare open_id=%s content_id=%s",
+            mask_identifier(feishu_open_id),
+            content_id,
+        )
+        try:
+            await send_file_to_user(content_id, feishu_open_id=feishu_open_id)
+        except Exception:
+            logger.exception(
+                "Failed to send related file to open_id=%s content_id=%s",
+                mask_identifier(feishu_open_id),
+                content_id,
+            )
+
+
+async def _send_related_files_to_chat(
+    chat_id: str,
+    results: Sequence[SearchResultOutput],
+) -> None:
+    """Fallback: send retrieved materials to the same chat when open_id is missing."""
+    if not results:
+        return
+
+    logger.info(
+        "bot_related_files_start chat_id=%s file_count=%d",
+        mask_identifier(chat_id),
+        len(results),
+    )
+    await send_text_to_chat(
+        chat_id,
+        "当前无法识别您的私信身份，暂时不能逐个发送素材说明与文件，请稍后重试。",
+    )
+
+
 async def handle_message_event(event: dict) -> None:
     """Handle @bot message events and respond with RAG search results."""
     total_start = time.monotonic()
     message = event.get("message", {})
+    sender = event.get("sender", {})
     chat_id = message.get("chat_id", "")
+    chat_type = message.get("chat_type")
     msg_type = message.get("message_type", "")
+    sender_open_id = (
+        sender.get("sender_id", {}).get("open_id") if isinstance(sender, dict) else None
+    )
 
     if msg_type != "text":
         return
@@ -251,6 +324,10 @@ async def handle_message_event(event: dict) -> None:
     context_docs = [_build_context_doc(r) for r in result.results]
     rag_start = time.monotonic()
     answer = await generate_rag_response(text, context_docs)
+    answer = _append_file_delivery_note(answer).replace(
+        _FILE_DELIVERY_NOTE,
+        _resolve_file_delivery_note(chat_type),
+    )
     logger.info(
         "bot_answer_ready chat_id=%s duration_ms=%.1f",
         mask_identifier(chat_id),
@@ -258,6 +335,10 @@ async def handle_message_event(event: dict) -> None:
     )
     send_start = time.monotonic()
     await send_text_to_chat(chat_id, answer)
+    if sender_open_id:
+        await _send_related_files_to_user(sender_open_id, result.results)
+    else:
+        await _send_related_files_to_chat(chat_id, result.results)
     logger.info(
         "bot_reply_sent chat_id=%s answer_len=%d send_ms=%.1f total_ms=%.1f",
         mask_identifier(chat_id),

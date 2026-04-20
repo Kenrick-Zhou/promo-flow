@@ -23,6 +23,9 @@ _COUNT_PATTERN = re.compile(
     r"(?:top\s*)?(\d{1,2})\s*(?:个|条|份|组|张|段|个视频|条视频)?",
     re.IGNORECASE,
 )
+_CHINESE_COUNT_PATTERN = re.compile(
+    r"(?:top\s*)?(十|两|俩|[一二三四五六七八九])\s*(?:个|条|份|组|张|段|个视频|条视频)?"
+)
 _RECENT_DAYS_PATTERN = re.compile(r"(?:最近|近)(\d{1,3})\s*(天|周|个月|月)")
 _EXCLUDE_PATTERNS = [
     re.compile(r"不要([^，。,；;？?]+)"),
@@ -34,6 +37,20 @@ _REQUEST_PREFIX_PATTERN = re.compile(
     r"^(给我|帮我|发我|推荐|列出|返回|找一下|找下|找找|找)\s*"
 )
 _LEADING_FILLER_PATTERN = re.compile(r"^(的|和|与|关于)\s*")
+_CHINESE_COUNT_MAP = {
+    "一": 1,
+    "二": 2,
+    "两": 2,
+    "俩": 2,
+    "三": 3,
+    "四": 4,
+    "五": 5,
+    "六": 6,
+    "七": 7,
+    "八": 8,
+    "九": 9,
+    "十": 10,
+}
 
 
 def _normalize_spacing(text: str) -> str:
@@ -177,6 +194,15 @@ def _extract_limit_intent(query: str) -> tuple[int | None, str]:
         count = int(match.group(1))
         cleaned = _normalize_spacing(query.replace(match.group(0), " ", 1))
         return count, cleaned
+
+    chinese_match = _CHINESE_COUNT_PATTERN.search(query)
+    if chinese_match and any(
+        marker in query for marker in ("给我", "来", "发我", "推荐", "列出", "返回")
+    ):
+        chinese_count = _CHINESE_COUNT_MAP.get(chinese_match.group(1))
+        if chinese_count is not None:
+            cleaned = _normalize_spacing(query.replace(chinese_match.group(0), " ", 1))
+            return chinese_count, cleaned
 
     return None, query
 

@@ -56,13 +56,21 @@ def _make_event_handler(
         if data.event is None or data.event.message is None:
             return
         msg = data.event.message
+        sender = getattr(data.event, "sender", None)
+        sender_id = getattr(sender, "sender_id", None)
         # Reconstruct the dict format expected by handle_message_event
         event_dict = {
             "message": {
                 "chat_id": msg.chat_id or "",
+                "chat_type": getattr(msg, "chat_type", None),
                 "message_type": msg.message_type or "",
                 "content": msg.content or "{}",
-            }
+            },
+            "sender": {
+                "sender_id": {
+                    "open_id": getattr(sender_id, "open_id", None),
+                }
+            },
         }
         # Fire-and-forget: don't block the ws receive loop for potentially slow RAG
         asyncio.run_coroutine_threadsafe(handle_message_event(event_dict), main_loop)

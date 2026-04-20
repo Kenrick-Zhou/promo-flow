@@ -282,6 +282,14 @@ def test_parse_query_rules_extracts_control_intents() -> None:
     assert "门店开业" in parsed.must_terms
 
 
+def test_parse_query_rules_extracts_chinese_limit_intent() -> None:
+    parsed = parse_query_rules("给我两个与食品相关的营销素材，最好是比较热门的")
+
+    assert parsed.limit_intent == 2
+    assert parsed.sort_intent == "hot"
+    assert "食品" in parsed.query_embedding_text
+
+
 def test_recent_sort_intent_boosts_fresh_content() -> None:
     parsed = ParsedQuery(
         raw_query="给我最新的门店开业视频",
@@ -483,3 +491,82 @@ async def test_search_contents_uses_query_limit_for_final_output_only(
     assert seen["candidate_count"] == 6
     assert seen["limit_intent"] == 3
     assert len(result.results) == 3
+
+
+@pytest.mark.asyncio
+async def test_search_contents_respects_chinese_query_limit_intent(
+    db: AsyncSession,
+    employee_user: User,
+    category: Category,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    contents: list[Content] = []
+    for idx in range(5):
+        content = Content(
+            title=_n(f"食品素材{idx}"),
+            description="食品推广图片",
+            content_type=ContentType.image,
+            status=ContentStatus.approved,
+            file_key=_n(f"food_{idx}.png"),
+            uploaded_by=employee_user.id,
+            category_id=category.id,
+            embedding=[0.1] * 1024,
+            ai_keywords=["食品", "零食"],
+            view_count=10 - idx,
+            download_count=5 - idx,
+        )
+        contents.append(content)
+    db.add_all(contents)
+    await db.commit()
+
+    async def fake_generate_embedding(query: str) -> list[float]:
+        return [0.1] * 1024
+
+    async def fake_recall_vector(*args, **kwargs) -> list[RecallItem]:
+        return [
+            RecallItem(content_id=content.id, score=1.0 - idx * 0.01)
+            for idx, content in enumerate(contents)
+        ]
+
+    async def fake_empty_recall(*args, **kwargs) -> list[RecallItem]:
+        return []
+
+    monkeypatch.setattr(
+        "app.services.search.core_unified.generate_embedding",
+        fake_generate_embedding,
+    )
+    monkeypatch.setattr(
+        "app.services.search.core_unified.recall_vector",
+        fake_recall_vector,
+    )
+    monkeypatch.setattr(
+        "app.services.search.core_unified.recall_fts",
+        fake_empty_recall,
+    )
+    monkeypatch.setattr(
+        "app.services.search.core_unified.recall_tags",
+        fake_empty_recall,
+    )
+
+    async def fake_rerank_with_llm(candidates, parsed: ParsedQuery):
+        return None
+
+    monkeypatch.setattr(
+        "app.services.search.core_unified.rerank_with_llm",
+        fake_rerank_with_llm,
+    )
+
+    result = await search_contents(
+        db,
+        command=SearchContentCommand(
+            query="给我两个与食品相关的营销素材，最好是比较热门的",
+            limit=5,
+            allow_query_limit_override=True,
+        ),
+    )
+
+    assert len(result.results) == 2
+    assert [item.content.id for item in result.results] == [
+        contents[0].id,
+        contents[1].id,
+    ]
