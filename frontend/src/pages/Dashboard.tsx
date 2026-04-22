@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type TouchEvent } from 'react'
 import { clsx } from 'clsx'
 import ContentGrid from '@/components/content/ContentGrid'
 import ContentDetail from '@/components/content/ContentDetail'
+import PageHeader from '@/components/layout/PageHeader'
 import LoadingDots from '@/components/ui/LoadingDots'
 import Toast from '@/components/ui/Toast'
 import { useContent } from '@/hooks/useContent'
@@ -234,9 +235,7 @@ export default function Dashboard() {
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">素材广场</h1>
-      </div>
+      <PageHeader title="素材广场" />
 
       <div className="sticky top-0 z-20 -mx-4 mb-6 space-y-3 border-b border-gray-200/70 bg-gray-50/95 px-4 py-2 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-gray-50/80 dark:border-gray-800/80 dark:bg-gray-900/95 dark:supports-[backdrop-filter]:bg-gray-900/80">
         {/* 搜索栏 */}

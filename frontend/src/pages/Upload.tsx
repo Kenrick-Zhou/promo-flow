@@ -1,11 +1,17 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import UploadForm from '@/components/content/UploadForm'
-import { ArrowLeft, CircleCheckBig } from 'lucide-react'
+import PageHeader from '@/components/layout/PageHeader'
+import { CircleCheckBig } from 'lucide-react'
+import { navigateBack } from '@/utils/navigation'
 
 export default function Upload() {
   const navigate = useNavigate()
   const [success, setSuccess] = useState(false)
+
+  function handleBack() {
+    navigateBack(navigate, '/')
+  }
 
   if (success) {
     return (
@@ -29,15 +35,7 @@ export default function Upload() {
   return (
     <div className="mx-auto flex w-full max-w-3xl justify-center">
       <div className="w-full max-w-2xl">
-        <div className="mb-6 flex items-center gap-3">
-          <button
-            onClick={() => navigate('/')}
-            className="rounded-lg p-1.5 text-gray-600 transition-colors active:bg-gray-100 dark:text-gray-300 dark:active:bg-gray-700"
-          >
-            <ArrowLeft className="size-5" />
-          </button>
-          <h1 className="text-lg font-bold text-gray-900 dark:text-white">上传素材</h1>
-        </div>
+        <PageHeader title="上传素材" onBack={handleBack} />
 
         <UploadForm onSuccess={() => setSuccess(true)} />
       </div>

@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ArrowLeft, RefreshCw } from 'lucide-react'
+import { RefreshCw } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
+import PageHeader from '@/components/layout/PageHeader'
 import MediaPreview from '@/components/ui/MediaPreview'
 import { useAudit } from '@/hooks/useAudit'
 import type { Content, ContentListOut, ContentStatus, ContentType } from '@/types'
+import { navigateBack } from '@/utils/navigation'
 import { getThumbnailUrl } from '@/utils/oss'
 
 const AUDIT_TABS: Array<{ key: ContentStatus; label: string }> = [
@@ -189,19 +191,13 @@ export default function Audit() {
 
   const currentTab = AUDIT_TABS.find((tab) => tab.key === activeStatus) ?? AUDIT_TABS[0]
 
+  function handleBack() {
+    navigateBack(navigate, '/me')
+  }
+
   return (
     <div>
-      <div className="mb-4 flex items-center gap-3">
-        <button
-          type="button"
-          onClick={() => navigate('/me')}
-          className="rounded-lg p-1.5 text-gray-600 transition-colors active:bg-gray-100 dark:text-gray-300 dark:active:bg-gray-700"
-          aria-label="返回我的页面"
-        >
-          <ArrowLeft className="size-5" />
-        </button>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">审核工作台</h1>
-      </div>
+      <PageHeader title="审核工作台" onBack={handleBack} />
 
       {/* 状态 tabs（吸顶） */}
       <div className="sticky top-0 z-20 -mx-4 mb-4 border-b border-gray-200/70 bg-gray-50/95 px-4 py-2 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-gray-50/80 dark:border-gray-800/80 dark:bg-gray-900/95 dark:supports-[backdrop-filter]:bg-gray-900/80">

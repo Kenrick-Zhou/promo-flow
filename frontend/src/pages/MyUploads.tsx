@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft } from 'lucide-react'
 import ContentGrid from '@/components/content/ContentGrid'
 import ContentDetail from '@/components/content/ContentDetail'
+import PageHeader from '@/components/layout/PageHeader'
 import LoadingDots from '@/components/ui/LoadingDots'
 import Toast from '@/components/ui/Toast'
 import { useContent } from '@/hooks/useContent'
 import type { Content, ContentStatus } from '@/types'
+import { navigateBack } from '@/utils/navigation'
 import { clsx } from 'clsx'
 
 const STATUS_TABS: Array<{ key: ContentStatus; label: string }> = [
@@ -67,18 +68,13 @@ export default function MyUploads() {
     }
   }
 
+  function handleBack() {
+    navigateBack(navigate, '/me')
+  }
+
   return (
     <div>
-      {/* 顶部导航 */}
-      <div className="mb-4 flex items-center gap-3">
-        <button
-          onClick={() => navigate('/me')}
-          className="rounded-lg p-1.5 text-gray-600 transition-colors active:bg-gray-100 dark:text-gray-300 dark:active:bg-gray-700"
-        >
-          <ArrowLeft className="size-5" />
-        </button>
-        <h1 className="text-lg font-bold text-gray-900 dark:text-white">我的上传</h1>
-      </div>
+      <PageHeader title="我的上传" onBack={handleBack} />
 
       {/* 状态筛选（吸顶） */}
       <div className="sticky top-0 z-20 -mx-4 mb-6 border-b border-gray-200/70 bg-gray-50/95 px-4 py-2 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-gray-50/80 dark:border-gray-800/80 dark:bg-gray-900/95 dark:supports-[backdrop-filter]:bg-gray-900/80">

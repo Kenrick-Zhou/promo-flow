@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react'
 import { Plus, Trash2, X } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import PageHeader from '@/components/layout/PageHeader'
 import api from '@/services/api'
 import { useSystem } from '@/hooks/useSystem'
 import type { CategoryTree, Tag, User } from '@/types'
+import { navigateBack } from '@/utils/navigation'
 
 const roleOptions = [
   { value: 'employee', label: '普通员工' },
@@ -20,10 +23,15 @@ const tabs: { key: TabKey; label: string }[] = [
 
 export default function Admin() {
   const [activeTab, setActiveTab] = useState<TabKey>('users')
+  const navigate = useNavigate()
+
+  function handleBack() {
+    navigateBack(navigate, '/me')
+  }
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-gray-900 mb-6 dark:text-white">管理设置</h1>
+      <PageHeader title="管理设置" onBack={handleBack} />
 
       {/* Tabs */}
       <div className="mb-6 flex gap-1 rounded-lg bg-gray-100 p-1 dark:bg-gray-700">
