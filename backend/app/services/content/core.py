@@ -496,9 +496,12 @@ async def send_file_to_user(
 
     def _stream_oss_to_feishu(
         file_url: str,
-        open_id: str,
+        target_id: str,
         file_name: str,
         is_image: bool,
+        *,
+        send_image,
+        send_file,
     ) -> None:
         """Sync: stream OSS → seekable SpooledTemporaryFile → Feishu SDK."""
         with httpx.Client(timeout=120.0) as http:
@@ -516,11 +519,11 @@ async def send_file_to_user(
                         tmp.write(chunk)
                     tmp.seek(0)
                     if is_image:
-                        _feishu_send_image_sync(open_id, tmp, file_name)
+                        send_image(target_id, tmp, file_name)
                     else:
-                        _feishu_send_file_sync(open_id, tmp, file_name)
+                        send_file(target_id, tmp, file_name)
 
-    try:
+    async def _load_delivery_payload() -> tuple[str, str, bool, str]:
         async with AsyncSessionLocal() as db:
             content = await get_content_orm(db, content_id)
             content_output = _content_to_output(content)
@@ -529,6 +532,10 @@ async def send_file_to_user(
         file_name = content.file_key.rsplit("/", 1)[-1]
         is_image = content.content_type == ContentType.image
         intro_markdown = _render_download_intro_markdown(content_output)
+        return file_url, file_name, is_image, intro_markdown
+
+    try:
+        file_url, file_name, is_image, intro_markdown = await _load_delivery_payload()
 
         try:
             await _feishu_send_markdown(
@@ -544,9 +551,101 @@ async def send_file_to_user(
             )
 
         await asyncio.to_thread(
-            _stream_oss_to_feishu, file_url, feishu_open_id, file_name, is_image
+            lambda: _stream_oss_to_feishu(
+                file_url,
+                feishu_open_id,
+                file_name,
+                is_image,
+                send_image=_feishu_send_image_sync,
+                send_file=_feishu_send_file_sync,
+            )
         )
     except Exception:
         logger.exception(
             "Failed to send file to user %s for content %s", feishu_open_id, content_id
+        )
+
+
+async def send_file_to_chat(
+    content_id: int,
+    *,
+    chat_id: str,
+) -> None:
+    """Stream file from OSS and send intro card + file to the current group chat."""
+    import asyncio
+    import logging
+    import tempfile
+
+    import httpx
+
+    from app.db.session import AsyncSessionLocal
+    from app.services.infrastructure.feishu import (
+        send_file_to_chat_sync as _feishu_send_file_to_chat_sync,
+    )
+    from app.services.infrastructure.feishu import (
+        send_image_to_chat_sync as _feishu_send_image_to_chat_sync,
+    )
+    from app.services.infrastructure.feishu import (
+        send_interactive_card_to_chat as _feishu_send_card_to_chat,
+    )
+
+    logger = logging.getLogger("promoflow.api")
+    logger.info("send_file_to_chat start: content=%s chat_id=%s", content_id, chat_id)
+
+    def _stream_oss_to_feishu(
+        file_url: str,
+        target_id: str,
+        file_name: str,
+        is_image: bool,
+    ) -> None:
+        with httpx.Client(timeout=120.0) as http:
+            with http.stream("GET", file_url) as resp:
+                resp.raise_for_status()
+                logger.info(
+                    "OSS stream open: status=%s content-length=%s",
+                    resp.status_code,
+                    resp.headers.get("content-length", "unknown"),
+                )
+                with tempfile.SpooledTemporaryFile(max_size=10 * 1024 * 1024) as tmp:
+                    for chunk in resp.iter_bytes(65536):
+                        tmp.write(chunk)
+                    tmp.seek(0)
+                    if is_image:
+                        _feishu_send_image_to_chat_sync(target_id, tmp, file_name)
+                    else:
+                        _feishu_send_file_to_chat_sync(target_id, tmp, file_name)
+
+    try:
+        async with AsyncSessionLocal() as db:
+            content = await get_content_orm(db, content_id)
+            content_output = _content_to_output(content)
+
+        file_url = content.file_url or get_public_url(content.file_key)
+        file_name = content.file_key.rsplit("/", 1)[-1]
+        is_image = content.content_type == ContentType.image
+        intro_markdown = _render_download_intro_markdown(content_output)
+
+        try:
+            await _feishu_send_card_to_chat(
+                chat_id,
+                title="素材已开始准备",
+                markdown=intro_markdown,
+            )
+        except Exception:
+            logger.exception(
+                "Failed to send download intro to chat %s for content %s",
+                chat_id,
+                content_id,
+            )
+
+        await asyncio.to_thread(
+            _stream_oss_to_feishu,
+            file_url,
+            chat_id,
+            file_name,
+            is_image,
+        )
+    except Exception:
+        logger.exception(
+            "Failed to send file to chat %s for content %s", chat_id, content_id
         )

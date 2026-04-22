@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
+import re
 import tempfile
 import time
 from collections.abc import Sequence
+from typing import Any
 
 import httpx
 
@@ -17,7 +20,11 @@ from app.services.infrastructure.feishu import send_text_to_chat
 logger = logging.getLogger("promoflow.api")
 
 _FILE_DELIVERY_NOTE = "我会继续逐个发送对应素材的说明与文件，请注意查收。"
-_GROUP_FILE_DELIVERY_NOTE = "我会继续通过私信逐个发送对应素材的说明与文件，请注意查收。"
+_GROUP_FILE_DELIVERY_NOTE = (
+    "我会继续在当前群内逐个发送对应素材的说明与文件，请注意查收。"
+)
+_AT_TAG_PATTERN = re.compile(r"<at\b[^>]*>.*?</at>", re.IGNORECASE | re.DOTALL)
+_INLINE_MENTION_PATTERN = re.compile(r"@_[^\s]+")
 
 
 # ---------------------------------------------------------------------------
@@ -193,6 +200,61 @@ def _join_keywords(keywords: list[str]) -> str:
     return "、".join(keywords[:8])
 
 
+def _normalize_message_text(text: str) -> str:
+    """Strip bot mention placeholders and normalize whitespace."""
+    normalized = _AT_TAG_PATTERN.sub(" ", text)
+    normalized = _INLINE_MENTION_PATTERN.sub(" ", normalized)
+    normalized = normalized.replace("\u00a0", " ")
+    return " ".join(normalized.split()).strip()
+
+
+def _extract_post_text(content: dict[str, Any]) -> str:
+    """Extract plain text from Feishu post message content."""
+    for locale_payload in content.values():
+        if not isinstance(locale_payload, dict):
+            continue
+        blocks = locale_payload.get("content")
+        if not isinstance(blocks, list):
+            continue
+
+        parts: list[str] = []
+        for block in blocks:
+            if not isinstance(block, list):
+                continue
+            for element in block:
+                if not isinstance(element, dict):
+                    continue
+                tag = element.get("tag")
+                if tag == "text":
+                    text = element.get("text")
+                    if isinstance(text, str):
+                        parts.append(text)
+        extracted = " ".join(part.strip() for part in parts if part.strip())
+        if extracted:
+            return extracted
+    return ""
+
+
+def _extract_message_text(message: dict[str, Any]) -> str:
+    """Extract user query text from Feishu text/post message payloads."""
+    msg_type = message.get("message_type", "")
+    content_str = message.get("content", "{}")
+    try:
+        content = json.loads(content_str)
+    except json.JSONDecodeError:
+        logger.warning("bot_message_invalid_json content=%s", content_str)
+        return ""
+
+    raw_text = ""
+    if msg_type == "text":
+        text = content.get("text")
+        raw_text = text if isinstance(text, str) else ""
+    elif msg_type == "post":
+        raw_text = _extract_post_text(content)
+
+    return _normalize_message_text(raw_text)
+
+
 def _append_file_delivery_note(answer: str) -> str:
     """Ensure the bot reply explicitly mentions follow-up file delivery."""
     stripped = answer.strip()
@@ -241,7 +303,9 @@ async def _send_related_files_to_chat(
     chat_id: str,
     results: Sequence[SearchResultOutput],
 ) -> None:
-    """Fallback: send retrieved materials to the same chat when open_id is missing."""
+    """Send each related material to the current group chat with intro + file."""
+    from app.services.content.core import send_file_to_chat
+
     if not results:
         return
 
@@ -250,10 +314,21 @@ async def _send_related_files_to_chat(
         mask_identifier(chat_id),
         len(results),
     )
-    await send_text_to_chat(
-        chat_id,
-        "当前无法识别您的私信身份，暂时不能逐个发送素材说明与文件，请稍后重试。",
-    )
+    for result in results:
+        content_id = result.content.id
+        logger.info(
+            "bot_related_file_prepare chat_id=%s content_id=%s",
+            mask_identifier(chat_id),
+            content_id,
+        )
+        try:
+            await send_file_to_chat(content_id, chat_id=chat_id)
+        except Exception:
+            logger.exception(
+                "Failed to send related file to chat_id=%s content_id=%s",
+                mask_identifier(chat_id),
+                content_id,
+            )
 
 
 async def handle_message_event(event: dict) -> None:
@@ -268,17 +343,10 @@ async def handle_message_event(event: dict) -> None:
         sender.get("sender_id", {}).get("open_id") if isinstance(sender, dict) else None
     )
 
-    if msg_type != "text":
+    if msg_type not in {"text", "post"}:
         return
 
-    import json as _json
-
-    content_str = message.get("content", "{}")
-    text = _json.loads(content_str).get("text", "").strip()
-
-    # Remove @bot mention prefix if present
-    if "@" in text:
-        text = text.split(" ", 1)[-1].strip()
+    text = _extract_message_text(message)
 
     if not text:
         return
@@ -335,10 +403,15 @@ async def handle_message_event(event: dict) -> None:
     )
     send_start = time.monotonic()
     await send_text_to_chat(chat_id, answer)
-    if sender_open_id:
+    if chat_type == "group":
+        await _send_related_files_to_chat(chat_id, result.results)
+    elif sender_open_id:
         await _send_related_files_to_user(sender_open_id, result.results)
     else:
-        await _send_related_files_to_chat(chat_id, result.results)
+        logger.warning(
+            "bot_reply_skip_file_delivery chat_id=%s reason=missing_sender_open_id",
+            mask_identifier(chat_id),
+        )
     logger.info(
         "bot_reply_sent chat_id=%s answer_len=%d send_ms=%.1f total_ms=%.1f",
         mask_identifier(chat_id),

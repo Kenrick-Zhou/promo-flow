@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.bot.handlers import handle_message_event
+from app.bot.handlers import _extract_message_text, handle_message_event
 from app.domains.content import (
     AiStatus,
     ContentOutput,
@@ -172,7 +172,7 @@ async def test_handle_message_event_sends_text_then_related_files_to_user(
 
 
 @pytest.mark.asyncio
-async def test_handle_message_event_continues_when_one_file_send_fails(
+async def test_handle_message_event_sends_group_files_to_current_chat(
     monkeypatch: pytest.MonkeyPatch,
 ):
     events: list[tuple[str, str]] = []
@@ -202,11 +202,9 @@ async def test_handle_message_event_continues_when_one_file_send_fails(
     async def fake_generate_rag_response(query: str, context_docs: list[str]) -> str:
         return "我为您找到 2 条素材。"
 
-    async def fake_send_file_to_user(content_id: int, *, feishu_open_id: str) -> None:
-        if content_id == 1:
-            events.append(("deliver_failed", str(content_id)))
-            raise RuntimeError("send failed")
-        events.append(("deliver", str(content_id)))
+    async def fake_send_file_to_chat(content_id: int, *, chat_id: str) -> None:
+        assert chat_id == "oc_test_chat"
+        events.append(("deliver_chat", str(content_id)))
 
     monkeypatch.setattr("app.bot.handlers.send_text_to_chat", fake_send_text)
     monkeypatch.setattr(
@@ -218,8 +216,8 @@ async def test_handle_message_event_continues_when_one_file_send_fails(
         fake_generate_rag_response,
     )
     monkeypatch.setattr(
-        "app.services.content.core.send_file_to_user",
-        fake_send_file_to_user,
+        "app.services.content.core.send_file_to_chat",
+        fake_send_file_to_chat,
     )
 
     await handle_message_event(
@@ -235,10 +233,10 @@ async def test_handle_message_event_continues_when_one_file_send_fails(
     )
 
     assert events[0][0] == "text"
-    assert "通过私信逐个发送" in events[0][1]
+    assert "在当前群内逐个发送" in events[0][1]
     assert events[1:] == [
-        ("deliver_failed", "1"),
-        ("deliver", "2"),
+        ("deliver_chat", "1"),
+        ("deliver_chat", "2"),
     ]
 
 
@@ -253,8 +251,47 @@ def test_append_file_delivery_note_does_not_repeat_existing_notice() -> None:
     assert _append_file_delivery_note(answer) == answer
 
 
+def test_extract_message_text_removes_text_mentions() -> None:
+    message = {
+        "message_type": "text",
+        "content": json.dumps(
+            {"text": '<at user_id="ou_bot">方小集</at> 给我两个门店开业视频'}
+        ),
+    }
+
+    assert _extract_message_text(message) == "给我两个门店开业视频"
+
+
+def test_extract_message_text_supports_post_messages() -> None:
+    message = {
+        "message_type": "post",
+        "content": json.dumps(
+            {
+                "zh_cn": {
+                    "title": "",
+                    "content": [
+                        [
+                            {
+                                "tag": "at",
+                                "user_id": "ou_bot",
+                                "user_name": "方小集",
+                            },
+                            {
+                                "tag": "text",
+                                "text": " 给我两个与食品相关的营销素材",
+                            },
+                        ]
+                    ],
+                }
+            }
+        ),
+    }
+
+    assert _extract_message_text(message) == "给我两个与食品相关的营销素材"
+
+
 @pytest.mark.asyncio
-async def test_handle_message_event_falls_back_when_sender_open_id_missing(
+async def test_handle_message_event_sends_group_files_without_sender_open_id(
     monkeypatch: pytest.MonkeyPatch,
 ):
     events: list[tuple[str, str]] = []
@@ -277,6 +314,10 @@ async def test_handle_message_event_falls_back_when_sender_open_id_missing(
     async def fake_generate_rag_response(query: str, context_docs: list[str]) -> str:
         return "我为您找到 1 条素材。"
 
+    async def fake_send_file_to_chat(content_id: int, *, chat_id: str) -> None:
+        assert chat_id == "oc_test_chat"
+        events.append(("deliver_chat", str(content_id)))
+
     monkeypatch.setattr("app.bot.handlers.send_text_to_chat", fake_send_text)
     monkeypatch.setattr(
         "app.services.search.search_contents",
@@ -285,6 +326,10 @@ async def test_handle_message_event_falls_back_when_sender_open_id_missing(
     monkeypatch.setattr(
         "app.services.infrastructure.ai.generate_rag_response",
         fake_generate_rag_response,
+    )
+    monkeypatch.setattr(
+        "app.services.content.core.send_file_to_chat",
+        fake_send_file_to_chat,
     )
 
     await handle_message_event(
@@ -302,10 +347,76 @@ async def test_handle_message_event_falls_back_when_sender_open_id_missing(
         (
             "text",
             "我为您找到 1 条素材。\n\n---\n"
-            "我会继续通过私信逐个发送对应素材的说明与文件，请注意查收。",
+            "我会继续在当前群内逐个发送对应素材的说明与文件，请注意查收。",
         ),
-        (
-            "text",
-            "当前无法识别您的私信身份，暂时不能逐个发送素材说明与文件，请稍后重试。",
-        ),
+        ("deliver_chat", "1"),
     ]
+
+
+@pytest.mark.asyncio
+async def test_handle_message_event_responds_to_group_post_message(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    events: list[tuple[str, str]] = []
+    results = [
+        _build_search_result(
+            content_id=1,
+            content_type=ContentType.image,
+            file_key="uploads/opening-1.png",
+            file_url="https://example.com/opening-1.png",
+            title="门店开业海报",
+        )
+    ]
+
+    async def fake_send_text(chat_id: str, text: str) -> None:
+        events.append(("text", text))
+
+    async def fake_search_contents(db: object, *, command) -> SimpleNamespace:
+        events.append(("query", command.query))
+        return SimpleNamespace(results=results)
+
+    async def fake_generate_rag_response(query: str, context_docs: list[str]) -> str:
+        return "我为您找到 1 条素材。"
+
+    monkeypatch.setattr("app.bot.handlers.send_text_to_chat", fake_send_text)
+    monkeypatch.setattr(
+        "app.services.search.search_contents",
+        fake_search_contents,
+    )
+    monkeypatch.setattr(
+        "app.services.infrastructure.ai.generate_rag_response",
+        fake_generate_rag_response,
+    )
+
+    await handle_message_event(
+        {
+            "message": {
+                "chat_id": "oc_test_chat",
+                "chat_type": "group",
+                "message_type": "post",
+                "content": json.dumps(
+                    {
+                        "zh_cn": {
+                            "title": "",
+                            "content": [
+                                [
+                                    {
+                                        "tag": "at",
+                                        "user_id": "ou_bot",
+                                        "user_name": "方小集",
+                                    },
+                                    {
+                                        "tag": "text",
+                                        "text": " 给我两个与食品相关的营销素材",
+                                    },
+                                ]
+                            ],
+                        }
+                    }
+                ),
+            }
+        }
+    )
+
+    assert events[0] == ("query", "给我两个与食品相关的营销素材")
+    assert events[1][0] == "text"

@@ -25,7 +25,11 @@ from app.models.category import Category
 from app.models.content import Content
 from app.models.user import User
 from app.services.content import create_content
-from app.services.content.core import _render_download_intro_markdown, send_file_to_user
+from app.services.content.core import (
+    _render_download_intro_markdown,
+    send_file_to_chat,
+    send_file_to_user,
+)
 from tests.conftest import TEST_PREFIX
 
 _RUN = uuid.uuid4().hex[:8]
@@ -414,6 +418,7 @@ def _install_download_test_stubs(
     *,
     content_type: ContentType,
     fail_markdown: bool = False,
+    target_kind: str = "user",
 ) -> list[tuple[str, str]]:
     events: list[tuple[str, str]] = []
     output = _build_download_output(content_type=content_type)
@@ -473,6 +478,13 @@ def _install_download_test_stubs(
         if fail_markdown:
             raise RuntimeError("markdown failed")
 
+    async def fake_send_card(chat_id: str, title: str, markdown: str) -> None:
+        events.append(("card", markdown))
+        assert chat_id == "oc_test_chat"
+        assert title == "素材已开始准备"
+        if fail_markdown:
+            raise RuntimeError("card failed")
+
     def fake_send_image(open_id: str, file_stream, file_name: str) -> None:
         events.append(("image", file_name))
         assert open_id == "ou_test"
@@ -481,6 +493,16 @@ def _install_download_test_stubs(
     def fake_send_file(open_id: str, file_stream, file_name: str) -> None:
         events.append(("file", file_name))
         assert open_id == "ou_test"
+        assert file_stream.read() == b"abc"
+
+    def fake_send_image_to_chat(chat_id: str, file_stream, file_name: str) -> None:
+        events.append(("chat_image", file_name))
+        assert chat_id == "oc_test_chat"
+        assert file_stream.read() == b"abc"
+
+    def fake_send_file_to_chat(chat_id: str, file_stream, file_name: str) -> None:
+        events.append(("chat_file", file_name))
+        assert chat_id == "oc_test_chat"
         assert file_stream.read() == b"abc"
 
     async def fake_to_thread(func, *args):
@@ -499,10 +521,22 @@ def _install_download_test_stubs(
         fake_send_markdown,
     )
     monkeypatch.setattr(
+        "app.services.infrastructure.feishu.send_interactive_card_to_chat",
+        fake_send_card,
+    )
+    monkeypatch.setattr(
         "app.services.infrastructure.feishu.send_image_to_user_sync", fake_send_image
     )
     monkeypatch.setattr(
         "app.services.infrastructure.feishu.send_file_to_user_sync", fake_send_file
+    )
+    monkeypatch.setattr(
+        "app.services.infrastructure.feishu.send_image_to_chat_sync",
+        fake_send_image_to_chat,
+    )
+    monkeypatch.setattr(
+        "app.services.infrastructure.feishu.send_file_to_chat_sync",
+        fake_send_file_to_chat,
     )
     monkeypatch.setattr("httpx.Client", _FakeHttpClient)
     monkeypatch.setattr("asyncio.to_thread", fake_to_thread)
@@ -538,4 +572,36 @@ async def test_send_file_to_user_continues_when_markdown_send_fails(
     assert events == [
         ("markdown", "介绍文案"),
         ("file", "demo.mp4"),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_send_file_to_chat_sends_card_before_image(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    events = _install_download_test_stubs(monkeypatch, content_type=ContentType.image)
+
+    await send_file_to_chat(1, chat_id="oc_test_chat")
+
+    assert events == [
+        ("card", "介绍文案"),
+        ("chat_image", "demo.png"),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_send_file_to_chat_continues_when_card_send_fails(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    events = _install_download_test_stubs(
+        monkeypatch,
+        content_type=ContentType.video,
+        fail_markdown=True,
+    )
+
+    await send_file_to_chat(1, chat_id="oc_test_chat")
+
+    assert events == [
+        ("card", "介绍文案"),
+        ("chat_file", "demo.mp4"),
     ]
