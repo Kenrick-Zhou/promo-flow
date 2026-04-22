@@ -294,7 +294,9 @@ async def search_contents(
         reranked = True
         llm_rerank_ms = _ms_since(t0)
 
-        # Build reordered results using LLM ranking for top-K
+        # Build reordered results using only the IDs returned by LLM.
+        # When the reranker omits candidates, treat that as an explicit filter
+        # decision instead of appending the original tail back into the list.
         id_to_scored = {item[0].id: item for item in scored}
         reordered: list[tuple[ContentOutput, float, float, float, list[str]]] = []
         seen: set[int] = set()
@@ -303,11 +305,6 @@ async def search_contents(
             if cid in id_to_scored and cid not in seen:
                 reordered.append(id_to_scored[cid])
                 seen.add(cid)
-
-        # Append remaining items not in reranked list
-        for item in scored:
-            if item[0].id not in seen:
-                reordered.append(item)
 
         scored = reordered
     else:

@@ -747,3 +747,84 @@ async def test_search_contents_respects_chinese_query_limit_intent(
         contents[0].id,
         contents[1].id,
     ]
+
+
+@pytest.mark.asyncio
+async def test_search_contents_respects_llm_rerank_subset_without_readding_tail(
+    db: AsyncSession,
+    employee_user: User,
+    category: Category,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    contents: list[Content] = []
+    for idx in range(5):
+        content = Content(
+            title=_n(f"食品素材{idx}"),
+            description="食品推广图片",
+            content_type=ContentType.image,
+            status=ContentStatus.approved,
+            file_key=_n(f"food_rerank_{idx}.png"),
+            uploaded_by=employee_user.id,
+            category_id=category.id,
+            embedding=[0.1] * 1024,
+            ai_keywords=["食品", "零食"],
+            view_count=10 - idx,
+            download_count=5 - idx,
+        )
+        contents.append(content)
+    db.add_all(contents)
+    await db.commit()
+
+    async def fake_generate_embedding(query: str) -> list[float]:
+        return [0.1] * 1024
+
+    async def fake_recall_vector(*args, **kwargs) -> list[RecallItem]:
+        return [
+            RecallItem(content_id=content.id, score=1.0 - idx * 0.01)
+            for idx, content in enumerate(contents)
+        ]
+
+    async def fake_empty_recall(*args, **kwargs) -> list[RecallItem]:
+        return []
+
+    async def fake_rerank(candidates, parsed: ParsedQuery):
+        assert len(candidates) == 5
+        return [contents[0].id, contents[2].id, contents[4].id]
+
+    monkeypatch.setattr(
+        "app.services.search.core_unified.generate_embedding",
+        fake_generate_embedding,
+    )
+    monkeypatch.setattr(
+        "app.services.search.core_unified.recall_vector",
+        fake_recall_vector,
+    )
+    monkeypatch.setattr(
+        "app.services.search.core_unified.recall_fts",
+        fake_empty_recall,
+    )
+    monkeypatch.setattr(
+        "app.services.search.core_unified.recall_tags",
+        fake_empty_recall,
+    )
+    monkeypatch.setattr(
+        "app.services.search.core_unified.rerank_with_llm",
+        fake_rerank,
+    )
+
+    result = await search_contents(
+        db,
+        command=SearchContentCommand(
+            query="有没有吃的素材",
+            limit=5,
+            allow_query_limit_override=True,
+        ),
+    )
+
+    assert [item.content.id for item in result.results] == [
+        contents[0].id,
+        contents[2].id,
+        contents[4].id,
+    ]
+    assert len(result.results) == 3
+    assert all(item.reranked for item in result.results)
