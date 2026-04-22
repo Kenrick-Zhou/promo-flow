@@ -116,6 +116,8 @@ class Settings(BaseSettings):
     SEARCH_SCORE_FTS_MAX: float = 30
     SEARCH_SCORE_VECTOR_MAX: float = 25
     SEARCH_SCORE_FRESHNESS_MAX: float = 5
+    SEARCH_SCORE_HOT_MAX: float = 25
+    SEARCH_SCORE_HOT_MULTIPLIER: float = 3
 
     # ── Search: LLM Rerank ───────────────────────────────────
     SEARCH_ENABLE_LLM_RERANK: bool = False

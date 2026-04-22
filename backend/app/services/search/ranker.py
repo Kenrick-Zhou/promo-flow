@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from datetime import UTC, datetime
 
 from app.core.config import settings
@@ -36,6 +37,7 @@ def compute_business_score(
     fts_rank: float,
     max_fts_rank: float,
     vector_similarity: float,
+    hot_score: float | None = None,
 ) -> tuple[float, list[str]]:
     """Compute business-weighted score for a single content.
 
@@ -127,6 +129,21 @@ def compute_business_score(
         semantic_score = vector_similarity * s.SEARCH_SCORE_VECTOR_MAX
         score += semantic_score
         signals.append("vector_match")
+
+    # ── score_popularity: deterministic hot sorting ─────────
+    if parsed.sort_intent == "hot":
+        popularity_source = max(hot_score or 0.0, 0.0)
+        if popularity_source <= 0:
+            popularity_source = math.log1p(max(content.view_count, 0)) + math.log1p(
+                max(content.download_count, 0) * 2
+            )
+        popularity_boost = min(
+            popularity_source * s.SEARCH_SCORE_HOT_MULTIPLIER,
+            s.SEARCH_SCORE_HOT_MAX,
+        )
+        if popularity_boost > 0:
+            score += popularity_boost
+            signals.append(f"sort_hot:{round(popularity_boost, 2)}")
 
     # ── score_freshness ──────────────────────────────────────
     try:

@@ -5,16 +5,23 @@ Orchestrates query understanding, multi-path recall, scoring, and reranking.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import time
 from datetime import UTC, datetime
 
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import (
+    AsyncConnection,
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+)
 from sqlalchemy.orm import joinedload, selectinload
 
 from app.core.config import settings
+from app.core.logging import fingerprint_text
 from app.domains.content import (
     AiStatus,
     ContentOutput,
@@ -78,6 +85,22 @@ def _ms_since(start: float) -> float:
     return round((time.monotonic() - start) * 1000, 1)
 
 
+async def _run_recall_path(coro) -> tuple[list, float]:
+    """Run a single recall coroutine and return its result with elapsed ms."""
+    t0 = time.monotonic()
+    items = await coro
+    return items, _ms_since(t0)
+
+
+async def _run_recall_with_session(
+    session_factory: async_sessionmaker[AsyncSession],
+    callback,
+) -> tuple[list, float]:
+    """Open an isolated session for one recall path and measure its timing."""
+    async with session_factory() as recall_db:
+        return await _run_recall_path(callback(recall_db))
+
+
 async def search_contents(
     db: AsyncSession,
     *,
@@ -126,19 +149,45 @@ async def search_contents(
     embedding_ms = _ms_since(t0)
 
     # ── 3. Multi-path recall ─────────────────────────────────
-    t0 = time.monotonic()
-    vector_items = await recall_vector(
-        db, query_embedding=query_embedding, parsed=parsed
+    recall_bind = db.bind
+    if recall_bind is None:
+        raise RuntimeError("Search recall requires an active database bind")
+    recall_engine: AsyncEngine
+    if isinstance(recall_bind, AsyncConnection):
+        recall_engine = recall_bind.engine
+    else:
+        recall_engine = recall_bind
+    recall_session_factory = async_sessionmaker(recall_engine, expire_on_commit=False)
+
+    (
+        (vector_items, vector_recall_ms),
+        (fts_items, fts_recall_ms),
+        (
+            tag_items,
+            tag_recall_ms,
+        ),
+    ) = await asyncio.gather(
+        _run_recall_with_session(
+            recall_session_factory,
+            lambda recall_db: recall_vector(
+                recall_db,
+                query_embedding=query_embedding,
+                parsed=parsed,
+            ),
+        ),
+        _run_recall_with_session(
+            recall_session_factory,
+            lambda recall_db: recall_fts(
+                recall_db,
+                query_text=parsed.normalized_query,
+                parsed=parsed,
+            ),
+        ),
+        _run_recall_with_session(
+            recall_session_factory,
+            lambda recall_db: recall_tags(recall_db, parsed=parsed),
+        ),
     )
-    vector_recall_ms = _ms_since(t0)
-
-    t0 = time.monotonic()
-    fts_items = await recall_fts(db, query_text=parsed.normalized_query, parsed=parsed)
-    fts_recall_ms = _ms_since(t0)
-
-    t0 = time.monotonic()
-    tag_items = await recall_tags(db, parsed=parsed)
-    tag_recall_ms = _ms_since(t0)
 
     # ── 4. RRF fusion ────────────────────────────────────────
     t0 = time.monotonic()
@@ -156,7 +205,17 @@ async def search_contents(
             llm_rerank_ms=None,
             total_ms=_ms_since(total_start),
         )
-        _log_timing(timing)
+        _log_timing(
+            timing,
+            embedding_ms=embedding_ms,
+            parsed=parsed,
+            vector_hits=len(vector_items),
+            fts_hits=len(fts_items),
+            tag_hits=len(tag_items),
+            candidate_count=0,
+            result_count=0,
+            reranked=False,
+        )
         return SearchOutput(
             results=[],
             timing=timing if settings.SEARCH_DEBUG_TIMING else None,
@@ -202,6 +261,7 @@ async def search_contents(
             fts_rank=fts_rank,
             max_fts_rank=max_fts_rank,
             vector_similarity=vector_sim,
+            hot_score=orm_content.hot_score,
         )
 
         # Add RRF base score
@@ -279,7 +339,17 @@ async def search_contents(
         llm_rerank_ms=llm_rerank_ms,
         total_ms=_ms_since(total_start),
     )
-    _log_timing(timing)
+    _log_timing(
+        timing,
+        embedding_ms=embedding_ms,
+        parsed=parsed,
+        vector_hits=len(vector_items),
+        fts_hits=len(fts_items),
+        tag_hits=len(tag_items),
+        candidate_count=len(candidate_ids),
+        result_count=len(results),
+        reranked=reranked,
+    )
 
     return SearchOutput(
         results=results,
@@ -288,13 +358,40 @@ async def search_contents(
     )
 
 
-def _log_timing(timing: SearchTimingOutput) -> None:
+def _log_timing(
+    timing: SearchTimingOutput,
+    *,
+    embedding_ms: float | None = None,
+    parsed: ParsedQuery | None = None,
+    vector_hits: int | None = None,
+    fts_hits: int | None = None,
+    tag_hits: int | None = None,
+    candidate_count: int | None = None,
+    result_count: int | None = None,
+    reranked: bool | None = None,
+) -> None:
     """Log structured timing data."""
     payload = {
         "timestamp": datetime.now(UTC).isoformat(),
         "level": "INFO",
         "logger": logger.name,
         "message": "search_timing",
+        "query_fp": fingerprint_text(parsed.raw_query) if parsed else None,
+        "query_len": len(parsed.raw_query) if parsed else None,
+        "llm_used": parsed.llm_used if parsed else None,
+        "parsed_content_type": parsed.parsed_content_type if parsed else None,
+        "sort_intent": parsed.sort_intent if parsed else None,
+        "limit_intent": parsed.limit_intent if parsed else None,
+        "exclude_term_count": len(parsed.exclude_terms) if parsed else None,
+        "must_term_count": len(parsed.must_terms) if parsed else None,
+        "should_term_count": len(parsed.should_terms) if parsed else None,
+        "must_term_fps": (
+            [fingerprint_text(term) for term in parsed.must_terms] if parsed else None
+        ),
+        "should_term_fps": (
+            [fingerprint_text(term) for term in parsed.should_terms] if parsed else None
+        ),
+        "embedding_ms": embedding_ms,
         "query_parse_ms": timing.query_parse_ms,
         "vector_recall_ms": timing.vector_recall_ms,
         "fts_recall_ms": timing.fts_recall_ms,
@@ -302,6 +399,12 @@ def _log_timing(timing: SearchTimingOutput) -> None:
         "rrf_merge_ms": timing.rrf_merge_ms,
         "scoring_ms": timing.scoring_ms,
         "llm_rerank_ms": timing.llm_rerank_ms,
+        "vector_hits": vector_hits,
+        "fts_hits": fts_hits,
+        "tag_hits": tag_hits,
+        "candidate_count": candidate_count,
+        "result_count": result_count,
+        "reranked": reranked,
         "total_ms": timing.total_ms,
     }
     logger.info(

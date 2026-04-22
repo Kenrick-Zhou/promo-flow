@@ -191,86 +191,79 @@ async def recall_tags(
     parsed: ParsedQuery,
 ) -> list[RecallItem]:
     """Recall by exact/phrase tag and AI keyword matching."""
-    all_terms = parsed.must_terms + parsed.should_terms
+    all_terms = list(dict.fromkeys(parsed.must_terms + parsed.should_terms))
     if not all_terms:
         return []
 
-    matched_ids: dict[int, float] = {}
+    term_cte_parts: list[str] = []
+    params: dict[str, object] = {"limit": settings.SEARCH_TAG_RECALL_LIMIT}
+    for idx, term in enumerate(all_terms):
+        param_name = f"term_{idx}"
+        term_cte_parts.append(f"SELECT LOWER(:{param_name}) AS term")
+        params[param_name] = term
 
-    # 1. Tag exact and phrase match
-    for term in all_terms:
-        # Exact match on tags
-        tag_exact_sql = text(
-            """
-            SELECT ct.content_id
-            FROM content_tags ct
-            JOIN tags t ON t.id = ct.tag_id
-            JOIN contents c ON c.id = ct.content_id
-            WHERE LOWER(t.name) = LOWER(:term)
-              AND c.status = 'approved'
-        """
-        )
-        result = await db.execute(tag_exact_sql, {"term": term})
-        for row in result.all():
-            matched_ids[row.content_id] = matched_ids.get(row.content_id, 0) + 2.0
+    term_cte_sql = "\n            UNION ALL\n            ".join(term_cte_parts)
+    type_clause = ""
+    if parsed.parsed_content_type:
+        type_clause = "AND c.content_type = :content_type"
+        params["content_type"] = parsed.parsed_content_type
 
-        # Phrase match on tags
-        tag_phrase_sql = text(
-            """
-            SELECT ct.content_id
-            FROM content_tags ct
-            JOIN tags t ON t.id = ct.tag_id
-            JOIN contents c ON c.id = ct.content_id
-            WHERE LOWER(t.name) LIKE LOWER(:pattern)
-              AND LOWER(t.name) != LOWER(:term)
-              AND c.status = 'approved'
-        """
-        )
-        result = await db.execute(
-            tag_phrase_sql, {"pattern": f"%{term}%", "term": term}
-        )
-        for row in result.all():
-            matched_ids[row.content_id] = matched_ids.get(row.content_id, 0) + 1.5
-
-    # 2. AI keyword exact and phrase match
-    for term in all_terms:
-        kw_exact_sql = text(
-            """
-            SELECT id AS content_id
-            FROM contents
-            WHERE status = 'approved'
-              AND ai_keywords IS NOT NULL
-              AND EXISTS (
-                  SELECT 1 FROM jsonb_array_elements_text(ai_keywords) kw
-                  WHERE LOWER(kw) = LOWER(:term)
+    sql = text(
+        f"""
+        WITH term_inputs AS (
+            SELECT DISTINCT term
+            FROM (
+                {term_cte_sql}
+            ) AS input_terms
+            WHERE term <> ''
+        ),
+        matches AS (
+            SELECT ct.content_id,
+                   CASE
+                       WHEN LOWER(t.name) = ti.term THEN 2.0
+                       ELSE 1.5
+                   END AS score
+            FROM term_inputs ti
+            JOIN tags t
+              ON LOWER(t.name) = ti.term
+              OR (
+                  LOWER(t.name) LIKE ('%' || ti.term || '%')
+                  AND LOWER(t.name) != ti.term
               )
-        """
-        )
-        result = await db.execute(kw_exact_sql, {"term": term})
-        for row in result.all():
-            matched_ids[row.content_id] = matched_ids.get(row.content_id, 0) + 1.8
+            JOIN content_tags ct ON ct.tag_id = t.id
+            JOIN contents c ON c.id = ct.content_id
+            WHERE c.status = 'approved'
+                            {type_clause}
 
-        kw_phrase_sql = text(
-            """
-            SELECT id AS content_id
-            FROM contents
-            WHERE status = 'approved'
-              AND ai_keywords IS NOT NULL
-              AND EXISTS (
-                  SELECT 1 FROM jsonb_array_elements_text(ai_keywords) kw
-                  WHERE LOWER(kw) LIKE LOWER(:pattern)
-                    AND LOWER(kw) != LOWER(:term)
-              )
-        """
-        )
-        result = await db.execute(kw_phrase_sql, {"pattern": f"%{term}%", "term": term})
-        for row in result.all():
-            matched_ids[row.content_id] = matched_ids.get(row.content_id, 0) + 1.0
+            UNION ALL
 
-    # Sort by match score descending, limit
-    items = sorted(
-        (RecallItem(content_id=cid, score=score) for cid, score in matched_ids.items()),
-        key=lambda x: x.score,
-        reverse=True,
+            SELECT c.id AS content_id,
+                   CASE
+                       WHEN LOWER(kw.keyword) = ti.term THEN 1.8
+                       ELSE 1.0
+                   END AS score
+            FROM term_inputs ti
+            JOIN contents c
+              ON c.status = 'approved'
+             AND c.ai_keywords IS NOT NULL
+                         {type_clause}
+            CROSS JOIN LATERAL jsonb_array_elements_text(c.ai_keywords) AS kw(keyword)
+            WHERE LOWER(kw.keyword) = ti.term
+               OR (
+                   LOWER(kw.keyword) LIKE ('%' || ti.term || '%')
+                   AND LOWER(kw.keyword) != ti.term
+               )
+        )
+        SELECT content_id, SUM(score) AS score
+        FROM matches
+        GROUP BY content_id
+        ORDER BY score DESC, content_id ASC
+        LIMIT :limit
+    """
     )
-    return items[: settings.SEARCH_TAG_RECALL_LIMIT]
+
+    result = await db.execute(sql, params)
+    return [
+        RecallItem(content_id=row.content_id, score=float(row.score))
+        for row in result.all()
+    ]

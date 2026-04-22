@@ -129,6 +129,24 @@ def _expand_synonyms(terms: list[str]) -> list[str]:
     return expanded
 
 
+def _normalize_llm_terms(raw_terms: object) -> list[str]:
+    """Normalize term lists returned by LLM for downstream recall."""
+    if not isinstance(raw_terms, list):
+        return []
+
+    normalized_terms: list[str] = []
+    seen: set[str] = set()
+    for item in raw_terms:
+        if not isinstance(item, str):
+            continue
+        term = _normalize_spacing(item.lower())
+        if len(term) < 2 or term in STOPWORDS or term in seen:
+            continue
+        seen.add(term)
+        normalized_terms.append(term)
+    return normalized_terms
+
+
 def _extract_time_intent(query: str) -> tuple[dict[str, str | int] | None, str]:
     """Extract explicit time window hints from query."""
     match = _RECENT_DAYS_PATTERN.search(query)
@@ -350,19 +368,28 @@ async def parse_query(query: str) -> ParsedQuery:
     if llm_result is None:
         return rule_result
 
-    # Merge LLM result into rule result
     parsed_content_type = rule_result.parsed_content_type
     llm_content_type = llm_result.get("content_type")
     if llm_content_type and llm_content_type != "null":
         parsed_content_type = llm_content_type
 
-    llm_must = llm_result.get("must_terms", [])
-    llm_should = llm_result.get("should_terms", [])
-    llm_normalized = llm_result.get("normalized_query", rule_result.normalized_query)
+    llm_must = _normalize_llm_terms(llm_result.get("must_terms", []))
+    llm_should = _normalize_llm_terms(llm_result.get("should_terms", []))
 
-    # Combine rule and LLM terms, deduplicate
-    combined_must = list(dict.fromkeys(rule_result.must_terms + llm_must))
-    combined_should = list(dict.fromkeys(rule_result.should_terms + llm_should))
+    llm_normalized_raw = llm_result.get("normalized_query")
+    llm_normalized = (
+        _normalize_spacing(llm_normalized_raw.lower())
+        if isinstance(llm_normalized_raw, str) and llm_normalized_raw.strip()
+        else rule_result.normalized_query
+    )
+
+    llm_has_structured_terms = bool(llm_must or llm_should)
+    if llm_has_structured_terms:
+        combined_must = llm_must or rule_result.must_terms
+        combined_should = llm_should or _expand_synonyms(combined_must)
+    else:
+        combined_must = rule_result.must_terms
+        combined_should = rule_result.should_terms
 
     return ParsedQuery(
         raw_query=rule_result.raw_query,

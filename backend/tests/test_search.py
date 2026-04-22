@@ -26,9 +26,9 @@ from app.models.content import Content
 from app.models.user import User
 from app.services.infrastructure.storage import get_public_url
 from app.services.search.core_unified import _log_timing, search_contents
-from app.services.search.query_parser import parse_query_rules
+from app.services.search.query_parser import parse_query, parse_query_rules
 from app.services.search.ranker import compute_business_score
-from app.services.search.retriever import RecallItem, _recall_fts_zhparser
+from app.services.search.retriever import RecallItem, _recall_fts_zhparser, recall_tags
 from tests.conftest import TEST_PREFIX
 
 _RUN = uuid.uuid4().hex[:8]
@@ -290,6 +290,66 @@ def test_parse_query_rules_extracts_chinese_limit_intent() -> None:
     assert "食品" in parsed.query_embedding_text
 
 
+@pytest.mark.asyncio
+async def test_parse_query_prefers_llm_terms_over_rule_bigrams(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "app.services.search.query_parser.settings.SEARCH_ENABLE_LLM_QUERY_PARSE",
+        True,
+        raising=False,
+    )
+
+    async def fake_llm_parse(query: str) -> dict[str, object]:
+        return {
+            "normalized_query": "食品营销素材 热门",
+            "content_type": None,
+            "must_terms": ["食品", "营销素材"],
+            "should_terms": ["热门"],
+            "intent": "找热门食品营销素材",
+        }
+
+    monkeypatch.setattr(
+        "app.services.search.query_parser._llm_parse_query",
+        fake_llm_parse,
+    )
+
+    parsed = await parse_query("给我两个与食品相关的营销素材，最好是比较热门的")
+
+    assert parsed.llm_used is True
+    assert parsed.must_terms == ["食品", "营销素材"]
+    assert parsed.should_terms == ["热门"]
+    assert "品相" not in parsed.must_terms
+
+
+@pytest.mark.asyncio
+async def test_recall_tags_uses_single_batched_query() -> None:
+    rows = [
+        SimpleNamespace(content_id=101, score=3.8),
+        SimpleNamespace(content_id=102, score=2.5),
+    ]
+    db = SimpleNamespace(
+        execute=AsyncMock(return_value=SimpleNamespace(all=lambda: rows))
+    )
+    parsed = ParsedQuery(
+        raw_query="食品营销素材",
+        normalized_query="食品营销素材",
+        parsed_content_type="image",
+        must_terms=["食品", "营销素材"],
+        should_terms=["热门"],
+        query_embedding_text="食品营销素材",
+        need_llm_rerank=True,
+        llm_used=True,
+        sort_intent="hot",
+    )
+
+    result = await recall_tags(db, parsed=parsed)
+
+    assert db.execute.await_count == 1
+    assert [item.content_id for item in result] == [101, 102]
+    assert [item.score for item in result] == [3.8, 2.5]
+
+
 def test_recent_sort_intent_boosts_fresh_content() -> None:
     parsed = ParsedQuery(
         raw_query="给我最新的门店开业视频",
@@ -381,6 +441,96 @@ def test_recent_sort_intent_boosts_fresh_content() -> None:
     assert "time_window_miss:30d" in stale_signals
 
 
+def test_hot_sort_intent_uses_hot_score_deterministically() -> None:
+    parsed = ParsedQuery(
+        raw_query="给我热门食品素材",
+        normalized_query="给我热门食品素材",
+        parsed_content_type="image",
+        must_terms=["食品"],
+        should_terms=[],
+        query_embedding_text="食品",
+        need_llm_rerank=True,
+        llm_used=True,
+        sort_intent="hot",
+    )
+
+    hotter = ContentOutput(
+        id=1,
+        title="热门食品图",
+        description="食品营销图",
+        tags=["食品"],
+        content_type=ContentType.image,
+        status=ContentStatus.approved,
+        file_key="hot.png",
+        file_url="https://example.com/hot.png",
+        file_size=1,
+        media_width=1080,
+        media_height=1080,
+        view_count=300,
+        download_count=80,
+        ai_summary="热门食品营销素材",
+        ai_keywords=["食品"],
+        ai_status=AiStatus.completed,
+        ai_error=None,
+        ai_processed_at=None,
+        uploaded_by=1,
+        uploaded_by_name="tester",
+        category_id=1,
+        category_name="食品",
+        primary_category_name="营销",
+        created_at="2026-04-10T00:00:00+00:00",
+        updated_at="2026-04-10T00:00:00+00:00",
+    )
+    cooler = ContentOutput(
+        id=2,
+        title="普通食品图",
+        description="食品营销图",
+        tags=["食品"],
+        content_type=ContentType.image,
+        status=ContentStatus.approved,
+        file_key="cool.png",
+        file_url="https://example.com/cool.png",
+        file_size=1,
+        media_width=1080,
+        media_height=1080,
+        view_count=20,
+        download_count=3,
+        ai_summary="食品营销素材",
+        ai_keywords=["食品"],
+        ai_status=AiStatus.completed,
+        ai_error=None,
+        ai_processed_at=None,
+        uploaded_by=1,
+        uploaded_by_name="tester",
+        category_id=1,
+        category_name="食品",
+        primary_category_name="营销",
+        created_at="2026-04-10T00:00:00+00:00",
+        updated_at="2026-04-10T00:00:00+00:00",
+    )
+
+    hotter_score, hotter_signals = compute_business_score(
+        hotter,
+        parsed,
+        fts_rank=1.0,
+        max_fts_rank=1.0,
+        vector_similarity=1.0,
+        hot_score=6.0,
+    )
+    cooler_score, cooler_signals = compute_business_score(
+        cooler,
+        parsed,
+        fts_rank=1.0,
+        max_fts_rank=1.0,
+        vector_similarity=1.0,
+        hot_score=0.8,
+    )
+
+    assert hotter_score > cooler_score
+    assert any(signal.startswith("sort_hot:") for signal in hotter_signals)
+    assert any(signal.startswith("sort_hot:") for signal in cooler_signals)
+
+
 def test_search_timing_is_logged_even_when_debug_timing_is_disabled(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -408,11 +558,38 @@ def test_search_timing_is_logged_even_when_debug_timing_is_disabled(
 
     monkeypatch.setattr("app.services.search.core_unified.logger.info", fake_info)
 
-    _log_timing(timing)
+    parsed = ParsedQuery(
+        raw_query="食品热门素材",
+        normalized_query="食品热门素材",
+        parsed_content_type="image",
+        must_terms=["食品"],
+        should_terms=["热门"],
+        query_embedding_text="食品热门素材",
+        need_llm_rerank=True,
+        llm_used=True,
+        sort_intent="hot",
+        limit_intent=2,
+    )
+
+    _log_timing(
+        timing,
+        embedding_ms=0.5,
+        parsed=parsed,
+        vector_hits=5,
+        fts_hits=4,
+        tag_hits=2,
+        candidate_count=6,
+        result_count=2,
+        reranked=True,
+    )
 
     assert logged_messages
     payload = json.loads(logged_messages[0])
     assert payload["message"] == "search_timing"
+    assert payload["llm_used"] is True
+    assert payload["candidate_count"] == 6
+    assert payload["result_count"] == 2
+    assert payload["vector_hits"] == 5
 
 
 @pytest.mark.asyncio
