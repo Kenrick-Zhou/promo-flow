@@ -63,7 +63,7 @@ echo "▶ 远程:      $REMOTE"
 if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
     EXISTING_SHA=$(git rev-list -n 1 "$TAG")
     if [[ "$EXISTING_SHA" != "$HEAD_SHA" ]]; then
-        echo "❌ 本地 tag $TAG 已存在且指向 $EXISTING_SHA（≠ HEAD $HEAD_SHA）" >&2
+        echo "❌ 本地 tag $TAG 已存在且指向 ${EXISTING_SHA}（不等于 HEAD ${HEAD_SHA}）" >&2
         echo "   请显式决定是否 git tag -d $TAG 后重建。" >&2
         exit 2
     fi
