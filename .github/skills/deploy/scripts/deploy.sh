@@ -1,42 +1,33 @@
 #!/usr/bin/env bash
-# PromoFlow 部署脚本：打 tag + 推送到 test/ 或 release/ 命名空间
-# 使用：./deploy.sh <env> <branch-name> <tag> [remote]
-#   env:         test | prod | both
-#   branch-name: 合规分支名（小写、横线，可选 feat/fix/... 前缀）
-#   tag:         vX.Y.Z 或 vX.Y.Z-rc.N
-#   remote:      默认 origin
+# PromoFlow 部署脚本：打 tag + 推送到 test 或 release 固定分支
+# 使用：./deploy.sh <env> <tag> [remote]
+#   env:    test | prod | both
+#   tag:    vX.Y.Z 或 vX.Y.Z-rc.N
+#   remote: 默认 origin
 
 set -euo pipefail
 
 usage() {
     cat >&2 <<EOF
-用法: $0 <env> <branch-name> <tag> [remote]
-  env:         test | prod | both
-  branch-name: ^([a-z]+/)?[a-z0-9]+(-[a-z0-9]+)*\$
-  tag:         ^v[0-9]+\\.[0-9]+\\.[0-9]+(-rc\\.[0-9]+)?\$
-  remote:      默认 origin
+用法: $0 <env> <tag> [remote]
+  env:    test | prod | both
+  tag:    ^v[0-9]+\\.[0-9]+\\.[0-9]+(-rc\\.[0-9]+)?\$
+  remote: 默认 origin
 EOF
     exit 2
 }
 
-[[ $# -lt 3 || $# -gt 4 ]] && usage
+[[ $# -lt 2 || $# -gt 3 ]] && usage
 
 ENV="$1"
-BRANCH_NAME="$2"
-TAG="$3"
-REMOTE="${4:-origin}"
+TAG="$2"
+REMOTE="${3:-origin}"
 
 # ---- 校验 ----
 case "$ENV" in
     test|prod|both) ;;
     *) echo "❌ env 非法: $ENV（需为 test/prod/both）" >&2; exit 2 ;;
 esac
-
-if [[ ! "$BRANCH_NAME" =~ ^([a-z]+/)?[a-z0-9]+(-[a-z0-9]+)*$ ]]; then
-    echo "❌ 分支名不合规: $BRANCH_NAME" >&2
-    echo "   需全小写、横线分割，可选类型前缀（feat/fix/chore/...）" >&2
-    exit 2
-fi
 
 if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$ ]]; then
     echo "❌ tag 不合规: $TAG（期望 vX.Y.Z 或 vX.Y.Z-rc.N）" >&2
@@ -65,7 +56,6 @@ fi
 HEAD_SHA=$(git rev-parse HEAD)
 echo "▶ 当前 HEAD: $HEAD_SHA"
 echo "▶ 环境:      $ENV"
-echo "▶ 分支名:    $BRANCH_NAME"
 echo "▶ Tag:       $TAG"
 echo "▶ 远程:      $REMOTE"
 
@@ -96,11 +86,10 @@ fi
 
 # ---- 推送 ----
 push_branch() {
-    local ns="$1"  # test 或 release
-    local ref="refs/heads/${ns}/${BRANCH_NAME}"
-    echo "▶ 推送 HEAD → $REMOTE $ref"
-    git push "$REMOTE" "HEAD:${ref}"
-    echo "✅ 已推送 $ns/${BRANCH_NAME}"
+    local branch="$1"  # test 或 release
+    echo "▶ 推送 HEAD → $REMOTE refs/heads/${branch}"
+    git push "$REMOTE" "HEAD:refs/heads/${branch}"
+    echo "✅ 已推送 ${branch}"
 }
 
 case "$ENV" in
@@ -118,7 +107,7 @@ echo "🎉 部署推送完成"
 echo "   环境:   $ENV"
 echo "   Tag:    $TAG"
 case "$ENV" in
-    test) echo "   分支:   $REMOTE test/${BRANCH_NAME}" ;;
-    prod) echo "   分支:   $REMOTE release/${BRANCH_NAME}" ;;
-    both) echo "   分支:   $REMOTE test/${BRANCH_NAME} + release/${BRANCH_NAME}" ;;
+    test) echo "   分支:   $REMOTE/test" ;;
+    prod) echo "   分支:   $REMOTE/release" ;;
+    both) echo "   分支:   $REMOTE/test + $REMOTE/release" ;;
 esac
