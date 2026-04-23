@@ -1,4 +1,4 @@
-"""Top-K LLM reranking for search results."""
+"""LLM reranking over the scored candidate window."""
 
 from __future__ import annotations
 
@@ -47,7 +47,7 @@ async def rerank_with_llm(
     candidates: list[tuple[ContentOutput, float, float, float, list[str]]],
     parsed: ParsedQuery,
 ) -> list[int] | None:
-    """Rerank top-K candidates using LLM.
+    """Rerank the candidate window using LLM.
 
     Args:
         candidates: List of (ContentOutput, initial_score, lexical_score,
@@ -63,12 +63,18 @@ async def rerank_with_llm(
         return None
 
     candidate_limit = settings.SEARCH_LLM_RERANK_CANDIDATE_LIMIT
-    top_k = candidates[:candidate_limit]
-    if len(top_k) <= 1:
+    candidate_window = candidates[:candidate_limit]
+    if len(candidate_window) <= 1:
         return None
 
     candidate_data = []
-    for content, score, lexical_score, semantic_score, matched_signals in top_k:
+    for (
+        content,
+        score,
+        lexical_score,
+        semantic_score,
+        matched_signals,
+    ) in candidate_window:
         candidate_data.append(
             _build_candidate_text(
                 content,

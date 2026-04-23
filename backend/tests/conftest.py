@@ -1,4 +1,5 @@
 import uuid
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest_asyncio
@@ -13,9 +14,13 @@ from sqlalchemy.ext.asyncio import (
 )
 from sqlalchemy.pool import NullPool
 
+from app.core.deps import get_current_user
 from app.db.base import Base  # noqa: F401 — imports all models so metadata is complete
 from app.db.session import get_session
+from app.domains.content import UserRole
 from app.main import app
+from app.models.category import Category
+from app.models.user import User
 
 # ---------------------------------------------------------------------------
 # Load test database URL from .env.test (project root), falling back to .env.
@@ -34,6 +39,18 @@ if not _TEST_DB_URL:
 # delete each other's in-flight data during session-scoped cleanup.
 _WORKER_ID = uuid.uuid4().hex[:8]
 TEST_PREFIX = f"__pytest__{_WORKER_ID}_"
+
+
+@pytest_asyncio.fixture
+def make_search_name() -> Callable[[str], str]:
+    """Return a per-test helper for generating cleanup-friendly names."""
+
+    run_id = uuid.uuid4().hex[:8]
+
+    def _make(name: str) -> str:
+        return f"{TEST_PREFIX}{run_id}_{name}"
+
+    return _make
 
 
 @pytest_asyncio.fixture(scope="session")
@@ -114,3 +131,44 @@ async def client(engine: AsyncEngine) -> AsyncClient:
     ) as ac:
         yield ac
     app.dependency_overrides.clear()
+
+
+@pytest_asyncio.fixture
+async def employee_user(
+    db: AsyncSession,
+    make_search_name: Callable[[str], str],
+) -> User:
+    user = User(
+        feishu_open_id=make_search_name(f"emp_{uuid.uuid4().hex[:4]}"),
+        feishu_union_id=make_search_name(f"union_{uuid.uuid4().hex[:4]}"),
+        name="测试员工",
+        role=UserRole.employee,
+    )
+    db.add(user)
+    await db.commit()
+    return user
+
+
+@pytest_asyncio.fixture
+async def employee_client(
+    client: AsyncClient,
+    employee_user: User,
+) -> AsyncClient:
+    app.dependency_overrides[get_current_user] = lambda: employee_user
+    yield client
+    app.dependency_overrides.pop(get_current_user, None)
+
+
+@pytest_asyncio.fixture
+async def category(
+    db: AsyncSession,
+    make_search_name: Callable[[str], str],
+) -> Category:
+    category = Category(
+        name=make_search_name(f"类目_{uuid.uuid4().hex[:4]}"),
+        description="测试类目",
+    )
+    db.add(category)
+    await db.commit()
+    await db.refresh(category)
+    return category

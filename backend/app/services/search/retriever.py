@@ -1,9 +1,9 @@
-"""Multi-path retrieval: vector, FTS, and tag exact match."""
+"""Multi-path retrieval helpers for vector, FTS, and tag/keyword matching."""
 
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from sqlalchemy import select, text
 from sqlalchemy.exc import DBAPIError
@@ -22,15 +22,6 @@ class RecallItem:
 
     content_id: int
     score: float = 0.0
-
-
-@dataclass(slots=True)
-class RecallResult:
-    """Aggregated results from all recall paths."""
-
-    vector_items: list[RecallItem] = field(default_factory=list)
-    fts_items: list[RecallItem] = field(default_factory=list)
-    tag_items: list[RecallItem] = field(default_factory=list)
 
 
 async def recall_vector(
@@ -190,7 +181,7 @@ async def recall_tags(
     *,
     parsed: ParsedQuery,
 ) -> list[RecallItem]:
-    """Recall by exact/phrase tag and AI keyword matching."""
+    """Recall by exact/phrase tag names plus AI keyword matches."""
     all_terms = list(dict.fromkeys(parsed.must_terms + parsed.should_terms))
     if not all_terms:
         return []
