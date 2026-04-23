@@ -87,8 +87,8 @@ fi
 # ---- 推送 ----
 push_branch() {
     local branch="$1"  # test 或 release
-    echo "▶ 推送 HEAD → $REMOTE refs/heads/${branch}"
-    git push "$REMOTE" "HEAD:refs/heads/${branch}"
+    echo "▶ 推送 HEAD → $REMOTE refs/heads/${branch} (--force)"
+    git push --force "$REMOTE" "HEAD:refs/heads/${branch}"
     echo "✅ 已推送 ${branch}"
 }
 

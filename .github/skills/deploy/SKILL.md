@@ -85,9 +85,10 @@ just check
 
 ## 决策边界
 
-- **禁止**：自动 `git push --force`、修改历史、跳过 `just check`、用非 `v` 前缀的 tag。
+- **禁止**：对 `master` 等开发分支 force-push、修改历史、跳过 `just check`、用非 `v` 前缀的 tag。
+- **允许 force-push**：`test` / `release` 为纯 CI/CD 触发分支，推送时始终使用 `--force` 覆盖。
 - **需用户确认**：tag 不合规、工作树不干净、tag 已在远程存在且指向不同 commit。
-- **可直接执行**：`just check`、`git tag -a`、`git push <remote> HEAD:refs/heads/test`、`git push <remote> HEAD:refs/heads/release`。
+- **可直接执行**：`just check`、`git tag -a`、`git push --force <remote> HEAD:refs/heads/test`、`git push --force <remote> HEAD:refs/heads/release`。
 
 ## 常见用法示例
 
