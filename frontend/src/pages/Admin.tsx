@@ -1,6 +1,16 @@
 import { useEffect, useState } from 'react'
-import { Plus, Trash2, X } from 'lucide-react'
+import { GripVertical, Plus, Trash2, X } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
+import {
+  DndContext,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core'
+import { SortableContext, arrayMove, rectSortingStrategy, useSortable } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import PageHeader from '@/components/layout/PageHeader'
 import api from '@/services/api'
 import { useSystem } from '@/hooks/useSystem'
@@ -460,13 +470,16 @@ function CategoriesTab() {
 // ============================================================
 
 function TagsTab() {
-  const { listTags, createTag, updateTag, deleteTag } = useSystem()
+  const { listTags, createTag, updateTag, deleteTag, reorderTags } = useSystem()
   const [tags, setTags] = useState<Tag[]>([])
   const [newTagName, setNewTagName] = useState('')
   const [isSystem, setIsSystem] = useState(true)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [editName, setEditName] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [reorderingGroup, setReorderingGroup] = useState<'system' | 'custom' | null>(null)
+  const [reorderList, setReorderList] = useState<Tag[]>([])
+  const [reorderSaving, setReorderSaving] = useState(false)
 
   async function refresh() {
     const data = await listTags()
@@ -526,6 +539,46 @@ function TagsTab() {
   const systemTags = tags.filter((t) => t.is_system)
   const customTags = tags.filter((t) => !t.is_system)
 
+  function startReorder(group: 'system' | 'custom') {
+    setError(null)
+    setEditingId(null)
+    setReorderingGroup(group)
+    setReorderList(group === 'system' ? systemTags : customTags)
+  }
+
+  function cancelReorder() {
+    setReorderingGroup(null)
+    setReorderList([])
+  }
+
+  async function saveReorder() {
+    if (!reorderingGroup) return
+    setReorderSaving(true)
+    setError(null)
+    try {
+      const items = reorderList.map((t, idx) => ({ id: t.id, sort_order: idx }))
+      await reorderTags(items)
+      setReorderingGroup(null)
+      setReorderList([])
+      await refresh()
+    } catch {
+      setError('保存顺序失败')
+    } finally {
+      setReorderSaving(false)
+    }
+  }
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    setReorderList((items) => {
+      const oldIndex = items.findIndex((i) => i.id === active.id)
+      const newIndex = items.findIndex((i) => i.id === over.id)
+      if (oldIndex < 0 || newIndex < 0) return items
+      return arrayMove(items, oldIndex, newIndex)
+    })
+  }
+
   return (
     <div className="space-y-6">
       {error && (
@@ -564,35 +617,23 @@ function TagsTab() {
 
       {/* System tags */}
       <div>
-        <h3 className="mb-3 text-sm font-medium text-gray-500 dark:text-gray-400">系统默认标签</h3>
-        <div className="flex flex-wrap gap-2">
-          {systemTags.map((tag) => (
-            <TagChip
-              key={tag.id}
-              tag={tag}
-              editingId={editingId}
-              editName={editName}
-              setEditingId={setEditingId}
-              setEditName={setEditName}
-              onSave={handleSaveEdit}
-              onDelete={handleDelete}
-              onToggleSystem={handleToggleSystem}
-            />
-          ))}
-          {systemTags.length === 0 && (
-            <p className="text-sm text-gray-400 dark:text-gray-500">暂无系统默认标签</p>
-          )}
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">系统默认标签</h3>
+          <TagReorderControls
+            group="system"
+            visible={systemTags.length > 0}
+            reorderingGroup={reorderingGroup}
+            saving={reorderSaving}
+            onStart={startReorder}
+            onCancel={cancelReorder}
+            onSave={saveReorder}
+          />
         </div>
-      </div>
-
-      {/* Custom tags */}
-      {customTags.length > 0 && (
-        <div>
-          <h3 className="mb-3 text-sm font-medium text-gray-500 dark:text-gray-400">
-            用户自定义标签
-          </h3>
+        {reorderingGroup === 'system' ? (
+          <TagReorderList tags={reorderList} onDragEnd={handleDragEnd} />
+        ) : (
           <div className="flex flex-wrap gap-2">
-            {customTags.map((tag) => (
+            {systemTags.map((tag) => (
               <TagChip
                 key={tag.id}
                 tag={tag}
@@ -605,7 +646,47 @@ function TagsTab() {
                 onToggleSystem={handleToggleSystem}
               />
             ))}
+            {systemTags.length === 0 && (
+              <p className="text-sm text-gray-400 dark:text-gray-500">暂无系统默认标签</p>
+            )}
           </div>
+        )}
+      </div>
+
+      {/* Custom tags */}
+      {customTags.length > 0 && (
+        <div>
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">用户自定义标签</h3>
+            <TagReorderControls
+              group="custom"
+              visible={customTags.length > 0}
+              reorderingGroup={reorderingGroup}
+              saving={reorderSaving}
+              onStart={startReorder}
+              onCancel={cancelReorder}
+              onSave={saveReorder}
+            />
+          </div>
+          {reorderingGroup === 'custom' ? (
+            <TagReorderList tags={reorderList} onDragEnd={handleDragEnd} />
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {customTags.map((tag) => (
+                <TagChip
+                  key={tag.id}
+                  tag={tag}
+                  editingId={editingId}
+                  editName={editName}
+                  setEditingId={setEditingId}
+                  setEditName={setEditName}
+                  onSave={handleSaveEdit}
+                  onDelete={handleDelete}
+                  onToggleSystem={handleToggleSystem}
+                />
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -684,6 +765,105 @@ function TagChip({
       >
         <X className="size-3" />
       </button>
+    </span>
+  )
+}
+
+interface TagReorderControlsProps {
+  group: 'system' | 'custom'
+  visible: boolean
+  reorderingGroup: 'system' | 'custom' | null
+  saving: boolean
+  onStart: (group: 'system' | 'custom') => void
+  onCancel: () => void
+  onSave: () => void
+}
+
+function TagReorderControls({
+  group,
+  visible,
+  reorderingGroup,
+  saving,
+  onStart,
+  onCancel,
+  onSave,
+}: TagReorderControlsProps) {
+  if (!visible) return null
+  if (reorderingGroup === group) {
+    return (
+      <div className="flex items-center gap-2">
+        <button
+          onClick={onCancel}
+          disabled={saving}
+          className="rounded-md px-3 py-1 text-xs text-gray-600 hover:bg-gray-100 disabled:opacity-50 dark:text-gray-300 dark:hover:bg-gray-700"
+        >
+          取消
+        </button>
+        <button
+          onClick={onSave}
+          disabled={saving}
+          className="rounded-md bg-purple-600 px-3 py-1 text-xs font-medium text-white hover:bg-purple-700 disabled:opacity-50"
+        >
+          {saving ? '保存中…' : '保存顺序'}
+        </button>
+      </div>
+    )
+  }
+  return (
+    <button
+      onClick={() => onStart(group)}
+      disabled={reorderingGroup !== null}
+      className="inline-flex items-center gap-1 rounded-md border border-gray-200 px-3 py-1 text-xs text-gray-600 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+    >
+      <GripVertical className="size-3" />
+      编辑顺序
+    </button>
+  )
+}
+
+interface TagReorderListProps {
+  tags: Tag[]
+  onDragEnd: (event: DragEndEvent) => void
+}
+
+function TagReorderList({ tags, onDragEnd }: TagReorderListProps) {
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }))
+  return (
+    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+      <SortableContext items={tags.map((t) => t.id)} strategy={rectSortingStrategy}>
+        <div className="flex flex-wrap gap-2">
+          {tags.map((tag) => (
+            <SortableTagChip key={tag.id} tag={tag} />
+          ))}
+        </div>
+      </SortableContext>
+    </DndContext>
+  )
+}
+
+function SortableTagChip({ tag }: { tag: Tag }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: tag.id,
+  })
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  }
+  return (
+    <span
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+      className={`inline-flex cursor-grab touch-none items-center gap-1.5 rounded-full px-3 py-1.5 text-sm select-none active:cursor-grabbing ${
+        tag.is_system
+          ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300'
+          : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
+      }`}
+    >
+      <GripVertical className="size-3.5 opacity-60" />
+      {tag.name}
     </span>
   )
 }
