@@ -57,10 +57,10 @@ just check
 
 ### 第 4 步 · 调用部署脚本
 
-使用 [scripts/deploy.sh](./scripts/deploy.sh)。脚本参数：
+使用 [.github/skills/deploy/scripts/deploy.sh](.github/skills/deploy/scripts/deploy.sh)。脚本参数：
 
 ```
-./scripts/deploy.sh <env> <tag> [remote]
+.github/skills/deploy/scripts/deploy.sh <env> <tag> [remote]
   env:     test | prod | both
   tag:     形如 v0.1.0 或 v0.1.0-rc.1
   remote:  默认 origin
