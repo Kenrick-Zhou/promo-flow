@@ -38,6 +38,7 @@ from app.services.content import (
     send_file_to_user,
     update_content,
 )
+from app.services.infrastructure.ai_runner import schedule_ai_task
 from app.services.infrastructure.storage import (
     delete_object,
     generate_file_key,
@@ -90,7 +91,6 @@ async def get_presigned_upload_url_route(
 @router.post("", response_model=ContentOut, status_code=status.HTTP_201_CREATED)
 async def create_content_route(
     data: ContentCreateIn,
-    background_tasks: BackgroundTasks,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
@@ -103,9 +103,7 @@ async def create_content_route(
     except (ContentNotFoundError, ContentForbiddenError, InvalidCategoryError) as exc:
         raise_content_error(exc)
 
-    background_tasks.add_task(
-        _run_ai_analysis, output.id, output.file_key, output.content_type.value
-    )
+    _schedule_ai_analysis(output.id, output.file_key, output.content_type.value)
     return ContentOut.from_domain(output)
 
 
@@ -116,7 +114,6 @@ async def create_content_route(
 )
 async def create_contents_batch_route(
     data: ContentBatchCreateIn,
-    background_tasks: BackgroundTasks,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
@@ -134,12 +131,7 @@ async def create_contents_batch_route(
         raise_content_error(exc)
 
     for output in outputs:
-        background_tasks.add_task(
-            _run_ai_analysis,
-            output.id,
-            output.file_key,
-            output.content_type.value,
-        )
+        _schedule_ai_analysis(output.id, output.file_key, output.content_type.value)
     return [ContentOut.from_domain(o) for o in outputs]
 
 
@@ -271,6 +263,14 @@ async def _update_hot_score_bg(content_id: int) -> None:
             await update_hot_score(db, content_id)
     except Exception:
         logger.exception("Failed to update hot score for content %d", content_id)
+
+
+def _schedule_ai_analysis(content_id: int, file_key: str, content_type: str) -> None:
+    """Schedule AI analysis with process-level concurrency control."""
+    schedule_ai_task(
+        lambda: _run_ai_analysis(content_id, file_key, content_type),
+        label=f"content:{content_id}",
+    )
 
 
 async def _run_ai_analysis(content_id: int, file_key: str, content_type: str) -> None:

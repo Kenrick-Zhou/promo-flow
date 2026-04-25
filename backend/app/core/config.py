@@ -84,6 +84,8 @@ class Settings(BaseSettings):
     DASHSCOPE_EMBEDDING_MODEL: str = "text-embedding-v3"
     DASHSCOPE_RAG_MODEL: str = "qwen3.5-flash"
     DASHSCOPE_RAG_TIMEOUT_S: int = 20
+    # 上传后 AI 分析（多模态分析 + 标题生成 + embedding）的最大并发任务数
+    AI_ANALYSIS_CONCURRENCY: int = 20
 
     # CORS
     CORS_ORIGINS: list[str] = ["http://localhost:5173", "http://localhost:3000"]
