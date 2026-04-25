@@ -227,6 +227,103 @@ async def test_create_content_rejects_document_content_type(
 
 
 @pytest.mark.asyncio
+async def test_create_contents_batch_creates_multiple_records(
+    employee_client: AsyncClient,
+    db: AsyncSession,
+    secondary_category: Category,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    queued: list[tuple[int, str, str]] = []
+
+    async def fake_run_ai_analysis(
+        content_id: int, file_key: str, content_type: str
+    ) -> None:
+        queued.append((content_id, file_key, content_type))
+
+    monkeypatch.setattr(content_router, "_run_ai_analysis", fake_run_ai_analysis)
+
+    file_key_a = _n("batch-a.png")
+    file_key_b = _n("batch-b.mp4")
+    resp = await employee_client.post(
+        "/api/v1/contents/batch",
+        json={
+            "files": [
+                {"content_type": "image", "file_key": file_key_a},
+                {"content_type": "video", "file_key": file_key_b},
+            ],
+            "description": "批量上传共享描述",
+            "tag_names": [_n("批量标签")],
+            "category_id": secondary_category.id,
+        },
+    )
+
+    assert resp.status_code == 201
+    data = resp.json()
+    assert isinstance(data, list)
+    assert len(data) == 2
+
+    file_keys = {item["file_key"] for item in data}
+    assert file_keys == {file_key_a, file_key_b}
+
+    for item in data:
+        assert item["description"] == "批量上传共享描述"
+        assert item["tags"] == [_n("批量标签")]
+        assert item["category_id"] == secondary_category.id
+        assert item["ai_status"] == "pending"
+
+    # AI background task queued for each created content
+    assert len(queued) == 2
+    assert {q[1] for q in queued} == {file_key_a, file_key_b}
+
+    # Persistence check
+    result = await db.execute(
+        select(Content).where(Content.file_key.in_({file_key_a, file_key_b}))
+    )
+    rows = result.scalars().all()
+    assert len(rows) == 2
+
+
+@pytest.mark.asyncio
+async def test_create_contents_batch_rejects_primary_category(
+    employee_client: AsyncClient,
+    primary_category: Category,
+):
+    resp = await employee_client.post(
+        "/api/v1/contents/batch",
+        json={
+            "files": [
+                {"content_type": "image", "file_key": _n("batch-bad.png")},
+            ],
+            "description": None,
+            "tag_names": [],
+            "category_id": primary_category.id,
+        },
+    )
+
+    assert resp.status_code == 400
+    data = resp.json()
+    assert data["error_code"] == "invalid_category"
+
+
+@pytest.mark.asyncio
+async def test_create_contents_batch_requires_at_least_one_file(
+    employee_client: AsyncClient,
+    secondary_category: Category,
+):
+    resp = await employee_client.post(
+        "/api/v1/contents/batch",
+        json={
+            "files": [],
+            "description": None,
+            "tag_names": [],
+            "category_id": secondary_category.id,
+        },
+    )
+
+    assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
 async def test_run_ai_analysis_uses_context_and_generates_title_after_analysis(
     db: AsyncSession,
     engine: AsyncEngine,

@@ -3,6 +3,8 @@ from __future__ import annotations
 from pydantic import BaseModel, Field
 
 from app.domains.content import (
+    BatchCreateContentCommand,
+    BatchCreateContentItem,
     ContentOutput,
     ContentStatus,
     ContentType,
@@ -45,6 +47,33 @@ class ContentUpdateIn(BaseModel):
             title=self.title,
             description=self.description,
             tag_names=self.tag_names,
+            category_id=self.category_id,
+        )
+
+
+class ContentBatchItemIn(BaseModel):
+    content_type: ContentType
+    file_key: str
+
+
+class ContentBatchCreateIn(BaseModel):
+    files: list[ContentBatchItemIn] = Field(..., min_length=1)
+    description: str | None = None
+    tag_names: list[str] = []
+    category_id: int
+
+    def to_domain(self, *, uploaded_by: int) -> BatchCreateContentCommand:
+        """Convert HTTP request to domain command."""
+        return BatchCreateContentCommand(
+            items=[
+                BatchCreateContentItem(
+                    content_type=item.content_type, file_key=item.file_key
+                )
+                for item in self.files
+            ],
+            description=self.description,
+            tag_names=self.tag_names,
+            uploaded_by=uploaded_by,
             category_id=self.category_id,
         )
 

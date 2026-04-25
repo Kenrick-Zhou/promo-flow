@@ -3,6 +3,7 @@
 from app.services.content.core import (
     audit_content,
     create_content,
+    create_content_batch,
     delete_content,
     edit_content_metadata,
     get_content,
@@ -35,6 +36,7 @@ __all__ = [
     "audit_content",
     "calculate_hot_score",
     "create_content",
+    "create_content_batch",
     "delete_content",
     "edit_content_metadata",
     "get_content",

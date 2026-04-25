@@ -16,6 +16,7 @@ from app.domains.content import (
 )
 from app.models.user import User
 from app.schemas.content import (
+    ContentBatchCreateIn,
     ContentCreateIn,
     ContentListOut,
     ContentOut,
@@ -27,6 +28,7 @@ from app.services.content import (
     ContentNotFoundError,
     InvalidCategoryError,
     create_content,
+    create_content_batch,
     delete_content,
     get_content,
     increment_download_count,
@@ -105,6 +107,40 @@ async def create_content_route(
         _run_ai_analysis, output.id, output.file_key, output.content_type.value
     )
     return ContentOut.from_domain(output)
+
+
+@router.post(
+    "/batch",
+    response_model=list[ContentOut],
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_contents_batch_route(
+    data: ContentBatchCreateIn,
+    background_tasks: BackgroundTasks,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Create multiple content records that share metadata.
+
+    Each file becomes its own Content record, then AI analysis is queued per
+    record. The category, tags and description are shared across all items.
+    """
+    try:
+        outputs = await create_content_batch(
+            db,
+            command=data.to_domain(uploaded_by=current_user.id),
+        )
+    except (ContentNotFoundError, ContentForbiddenError, InvalidCategoryError) as exc:
+        raise_content_error(exc)
+
+    for output in outputs:
+        background_tasks.add_task(
+            _run_ai_analysis,
+            output.id,
+            output.file_key,
+            output.content_type.value,
+        )
+    return [ContentOut.from_domain(o) for o in outputs]
 
 
 @router.get("", response_model=ContentListOut)

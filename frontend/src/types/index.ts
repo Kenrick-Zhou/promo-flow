@@ -52,6 +52,18 @@ export interface ContentCreate {
   category_id: number
 }
 
+export interface ContentBatchItem {
+  content_type: ContentType
+  file_key: string
+}
+
+export interface ContentBatchCreate {
+  files: ContentBatchItem[]
+  description?: string
+  tag_names: string[]
+  category_id: number
+}
+
 export interface ContentListOut {
   total: number
   items: Content[]

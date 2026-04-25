@@ -13,6 +13,7 @@ from app.domains.content import (
     AuditContentCommand,
     AuditDecision,
     AuditLogOutput,
+    BatchCreateContentCommand,
     ContentListOutput,
     ContentOutput,
     ContentStatus,
@@ -183,6 +184,51 @@ async def create_content(
     await db.commit()
     # Re-query with full relationship loading
     return await get_content(db, content_id)
+
+
+async def create_content_batch(
+    db: AsyncSession,
+    *,
+    command: BatchCreateContentCommand,
+) -> list[ContentOutput]:
+    """Create multiple content records that share category, tags and description.
+
+    Each file becomes its own Content row; the shared metadata is duplicated
+    onto every row so downstream features (audit, search, AI) work uniformly.
+    """
+    if not command.items:
+        raise InvalidCategoryError("批量上传至少需要一个文件。")
+
+    # Validate category once (shared across all items)
+    category = await db.get(Category, command.category_id)
+    if category is None:
+        raise InvalidCategoryError("指定的类目不存在。")
+    if category.parent_id is None:
+        raise InvalidCategoryError("素材必须归属到二级类目。")
+
+    # Resolve tags once (shared across all items)
+    tags = await _find_or_create_tags(db, command.tag_names)
+
+    contents: list[Content] = []
+    for item in command.items:
+        content = Content(
+            title=None,
+            description=command.description,
+            content_type=item.content_type,
+            file_key=item.file_key,
+            file_url=get_public_url(item.file_key),
+            uploaded_by=command.uploaded_by,
+            category_id=command.category_id,
+        )
+        content.tag_objects = list(tags)
+        db.add(content)
+        contents.append(content)
+
+    await db.flush()
+    content_ids = [c.id for c in contents]
+    await db.commit()
+
+    return [await get_content(db, cid) for cid in content_ids]
 
 
 async def get_content(db: AsyncSession, content_id: int) -> ContentOutput:

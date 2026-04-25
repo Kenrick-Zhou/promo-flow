@@ -68,6 +68,25 @@ class CreateContentCommand:
 
 
 @dataclass(slots=True)
+class BatchCreateContentItem:
+    """A single file entry within a batch create command."""
+
+    content_type: ContentType
+    file_key: str
+
+
+@dataclass(slots=True)
+class BatchCreateContentCommand:
+    """Command for creating multiple contents that share metadata."""
+
+    items: list[BatchCreateContentItem]
+    description: str | None
+    tag_names: list[str]
+    uploaded_by: int
+    category_id: int
+
+
+@dataclass(slots=True)
 class UpdateContentCommand:
     """Command for updating existing content."""
 

@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useContent } from '@/hooks/useContent'
 import { useSystem } from '@/hooks/useSystem'
 import CategorySelector from '@/components/content/CategorySelector'
 import UploadProgressDialog from '@/components/content/UploadProgressDialog'
 import LoadingDots from '@/components/ui/LoadingDots'
 import TagSelector from '@/components/content/TagSelector'
-import type { CategoryTree, ContentType, Tag } from '@/types'
+import type { CategoryTree, ContentBatchItem, ContentType, Tag } from '@/types'
 
 const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'tiff', 'heic', 'heif']
 const VIDEO_EXTENSIONS = ['mp4', 'avi', 'mov', 'wmv', 'flv', 'mkv', 'webm', 'm4v']
@@ -17,6 +17,12 @@ interface Props {
 }
 
 type UploadStage = 'idle' | 'preparing' | 'uploading' | 'registering'
+
+interface SelectedFile {
+  id: string
+  file: File
+  contentType: ContentType
+}
 
 function getErrorMessage(error: unknown): string {
   if (error instanceof TypeError) {
@@ -53,13 +59,16 @@ function detectContentType(filename: string): ContentType | null {
   return null
 }
 
+function makeId(): string {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+}
+
 export default function UploadForm({ onSuccess }: Props) {
-  const { getPresignedUrl, createContent, uploadToPresignedUrl } = useContent()
+  const { getPresignedUrl, createContentsBatch, uploadToPresignedUrl } = useContent()
   const { listCategories, listTags } = useSystem()
 
-  const [file, setFile] = useState<File | null>(null)
+  const [files, setFiles] = useState<SelectedFile[]>([])
   const [isDragActive, setIsDragActive] = useState(false)
-  const [contentType, setContentType] = useState<ContentType | null>(null)
   const [description, setDescription] = useState('')
   const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [primaryCategoryId, setPrimaryCategoryId] = useState<number | null>(null)
@@ -69,9 +78,12 @@ export default function UploadForm({ onSuccess }: Props) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [uploadStage, setUploadStage] = useState<UploadStage>('idle')
   const [uploadProgress, setUploadProgress] = useState(0)
+  const [perFileProgress, setPerFileProgress] = useState<Record<string, number>>({})
 
   const [categories, setCategories] = useState<CategoryTree[]>([])
   const [availableTags, setAvailableTags] = useState<Tag[]>([])
+
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
     Promise.all([listCategories(), listTags()])
@@ -108,7 +120,7 @@ export default function UploadForm({ onSuccess }: Props) {
         }
       case 'uploading':
         return {
-          title: '正在上传文件',
+          title: files.length > 1 ? `正在上传文件（共 ${files.length} 个）` : '正在上传文件',
           hint: '文件正在传输中，进度会随网络和文件大小实时更新。',
         }
       case 'registering':
@@ -123,41 +135,60 @@ export default function UploadForm({ onSuccess }: Props) {
           hint: '请稍候…',
         }
     }
-  }, [uploadStage])
+  }, [uploadStage, files.length])
 
   if (initialLoading) {
     return <LoadingDots label="正在加载类目与系统默认标签…" className="mx-auto max-w-lg" />
   }
 
-  function handleSelectedFile(selected: File | null) {
-    setFile(selected)
+  function appendFiles(incoming: FileList | File[] | null) {
+    if (!incoming) return
 
-    if (selected) {
-      const detected = detectContentType(selected.name)
+    const list = Array.from(incoming)
+    if (list.length === 0) return
+
+    const accepted: SelectedFile[] = []
+    const rejected: string[] = []
+
+    for (const file of list) {
+      const detected = detectContentType(file.name)
       if (!detected) {
-        setError('不支持的文件类型，请上传图片或视频文件')
-        setContentType(null)
-      } else {
-        setError(null)
-        setContentType(detected)
+        rejected.push(file.name)
+        continue
       }
-      return
+      accepted.push({ id: makeId(), file, contentType: detected })
     }
 
-    setContentType(null)
+    if (rejected.length > 0) {
+      setError(`以下文件类型不受支持，已忽略：${rejected.join('、')}`)
+    } else {
+      setError(null)
+    }
+
+    if (accepted.length > 0) {
+      setFiles((prev) => [...prev, ...accepted])
+    }
+  }
+
+  function removeFile(id: string) {
+    setFiles((prev) => prev.filter((f) => f.id !== id))
+  }
+
+  function clearAllFiles() {
+    setFiles([])
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
   }
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    handleSelectedFile(e.target.files?.[0] ?? null)
+    appendFiles(e.target.files)
+    e.target.value = ''
   }
 
   function handleDragOver(e: React.DragEvent<HTMLLabelElement>) {
     e.preventDefault()
-
-    if (isSubmitting) {
-      return
-    }
-
+    if (isSubmitting) return
     setIsDragActive(true)
   }
 
@@ -166,19 +197,14 @@ export default function UploadForm({ onSuccess }: Props) {
     if (relatedTarget instanceof Node && e.currentTarget.contains(relatedTarget)) {
       return
     }
-
     setIsDragActive(false)
   }
 
   function handleDrop(e: React.DragEvent<HTMLLabelElement>) {
     e.preventDefault()
     setIsDragActive(false)
-
-    if (isSubmitting) {
-      return
-    }
-
-    handleSelectedFile(e.dataTransfer.files?.[0] ?? null)
+    if (isSubmitting) return
+    appendFiles(e.dataTransfer.files)
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -188,8 +214,8 @@ export default function UploadForm({ onSuccess }: Props) {
       return
     }
 
-    if (!file || !contentType) {
-      setError('请选择要上传的图片或视频文件')
+    if (files.length === 0) {
+      setError('请至少选择一个图片或视频文件')
       return
     }
 
@@ -201,32 +227,63 @@ export default function UploadForm({ onSuccess }: Props) {
     setError(null)
     setIsSubmitting(true)
     setUploadStage('preparing')
-    setUploadProgress(8)
+    setUploadProgress(5)
+    setPerFileProgress({})
+
+    const submitFiles = files
+    const totalSize = submitFiles.reduce((acc, f) => acc + (f.file.size || 1), 0)
 
     try {
-      const uploadContentType = file.type || 'application/octet-stream'
-      const { upload_url, file_key, upload_headers } = await getPresignedUrl(
-        file.name,
-        uploadContentType,
+      // Step 1: request presigned URLs in parallel
+      const presignedResults = await Promise.all(
+        submitFiles.map(async (entry) => {
+          const uploadContentType = entry.file.type || 'application/octet-stream'
+          const presigned = await getPresignedUrl(entry.file.name, uploadContentType)
+          return { entry, presigned }
+        }),
       )
 
+      // Step 2: upload all files in parallel; track per-file progress
       setUploadStage('uploading')
-      setUploadProgress(12)
+      setUploadProgress(10)
 
-      await uploadToPresignedUrl(upload_url, file, upload_headers, (progress) => {
-        const mappedProgress = 12 + Math.round(progress * 0.76)
-        setUploadProgress(Math.min(88, mappedProgress))
-      })
+      await Promise.all(
+        presignedResults.map(({ entry, presigned }) =>
+          uploadToPresignedUrl(
+            presigned.upload_url,
+            entry.file,
+            presigned.upload_headers,
+            (progress) => {
+              setPerFileProgress((prev) => {
+                const next = { ...prev, [entry.id]: progress }
+                const uploaded = submitFiles.reduce((acc, f) => {
+                  const p = next[f.id] ?? 0
+                  return acc + (f.file.size || 1) * p
+                }, 0)
+                const overall = totalSize > 0 ? uploaded / totalSize : 0
+                const mapped = 10 + Math.round(overall * 0.78)
+                setUploadProgress(Math.min(88, mapped))
+                return next
+              })
+            },
+          ),
+        ),
+      )
 
+      // Step 3: register all contents in a single batch call
       setUploadStage('registering')
       setUploadProgress(92)
 
-      await createContent({
+      const batchItems: ContentBatchItem[] = presignedResults.map(({ entry, presigned }) => ({
+        content_type: entry.contentType,
+        file_key: presigned.file_key,
+      }))
+
+      await createContentsBatch({
+        files: batchItems,
         description: description || undefined,
         tag_names: selectedTags,
-        content_type: contentType,
         category_id: secondaryCategoryId,
-        file_key,
       })
 
       setUploadProgress(100)
@@ -242,6 +299,13 @@ export default function UploadForm({ onSuccess }: Props) {
     }
   }
 
+  const dialogFileName =
+    files.length === 1
+      ? files[0].file.name
+      : files.length > 1
+        ? `${files.length} 个文件`
+        : undefined
+
   return (
     <>
       <UploadProgressDialog
@@ -249,7 +313,7 @@ export default function UploadForm({ onSuccess }: Props) {
         progress={uploadProgress}
         title={progressCopy.title}
         hint={progressCopy.hint}
-        fileName={file?.name}
+        fileName={dialogFileName}
       />
 
       <form
@@ -288,38 +352,82 @@ export default function UploadForm({ onSuccess }: Props) {
             </span>
 
             <span className="mt-3 block text-sm font-semibold text-gray-900 sm:text-base dark:text-white">
-              {isDragActive ? '松开即可上传素材' : '拖拽素材到这里，或点击选择文件'}
+              {isDragActive ? '松开即可添加素材' : '拖拽素材到这里，或点击选择文件（支持多选）'}
             </span>
             <span className="mt-1.5 block text-xs leading-5 text-gray-500 sm:text-sm dark:text-gray-400">
-              支持图片和视频文件，PC 端可直接拖拽，移动端点击此区域即可选择
+              支持图片和视频混合上传，所选文件将共享下方填写的类目、标签和描述
             </span>
 
             <input
               id="file-input"
+              ref={fileInputRef}
               type="file"
               accept="image/*,video/*"
+              multiple
               disabled={isSubmitting}
               className="sr-only"
               onChange={handleFileChange}
             />
           </label>
 
-          <div className="mt-3 flex min-h-5 flex-wrap items-center gap-2 text-xs text-gray-500 sm:text-sm dark:text-gray-400">
-            {file ? (
-              <>
-                <span className="font-medium text-gray-700 dark:text-gray-200">已选择：</span>
-                <span className="break-all">{file.name}</span>
-              </>
-            ) : (
-              <span>尚未选择文件</span>
-            )}
-
-            {contentType && (
-              <span className="inline-block rounded-full bg-purple-100 px-2.5 py-0.5 text-xs font-medium text-purple-700 dark:bg-purple-900/30 dark:text-purple-300">
-                {typeLabel[contentType]}
-              </span>
-            )}
-          </div>
+          {files.length === 0 ? (
+            <div className="mt-3 text-xs text-gray-500 sm:text-sm dark:text-gray-400">
+              尚未选择文件
+            </div>
+          ) : (
+            <div className="mt-3 space-y-2">
+              <div className="flex items-center justify-between text-xs text-gray-500 sm:text-sm dark:text-gray-400">
+                <span>
+                  已选择{' '}
+                  <span className="font-semibold text-gray-700 dark:text-gray-200">
+                    {files.length}
+                  </span>{' '}
+                  个文件
+                </span>
+                <button
+                  type="button"
+                  onClick={clearAllFiles}
+                  disabled={isSubmitting}
+                  className="text-xs font-medium text-purple-600 hover:text-purple-700 disabled:cursor-not-allowed disabled:opacity-50 dark:text-purple-300 dark:hover:text-purple-200"
+                >
+                  全部清除
+                </button>
+              </div>
+              <ul className="divide-y divide-gray-100 rounded-xl border border-gray-200 dark:divide-gray-800 dark:border-gray-700">
+                {files.map((entry) => {
+                  const progress = perFileProgress[entry.id]
+                  return (
+                    <li
+                      key={entry.id}
+                      className="flex items-center gap-3 px-3 py-2 text-xs sm:text-sm"
+                    >
+                      <span className="inline-block shrink-0 rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700 dark:bg-purple-900/30 dark:text-purple-300">
+                        {typeLabel[entry.contentType]}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate text-gray-700 dark:text-gray-200">
+                        {entry.file.name}
+                      </span>
+                      {isSubmitting && uploadStage === 'uploading' && progress !== undefined && (
+                        <span className="shrink-0 text-xs text-gray-500 dark:text-gray-400">
+                          {progress}%
+                        </span>
+                      )}
+                      {!isSubmitting && (
+                        <button
+                          type="button"
+                          onClick={() => removeFile(entry.id)}
+                          className="shrink-0 text-xs font-medium text-gray-400 hover:text-red-600 dark:text-gray-500 dark:hover:text-red-400"
+                          aria-label={`移除 ${entry.file.name}`}
+                        >
+                          移除
+                        </button>
+                      )}
+                    </li>
+                  )
+                })}
+              </ul>
+            </div>
+          )}
         </div>
 
         <CategorySelector
@@ -343,7 +451,7 @@ export default function UploadForm({ onSuccess }: Props) {
             htmlFor="description"
             className="block text-sm font-medium text-gray-700 dark:text-gray-200"
           >
-            描述（可选）
+            描述（可选，将应用于所有文件）
           </label>
           <textarea
             id="description"
@@ -363,10 +471,14 @@ export default function UploadForm({ onSuccess }: Props) {
 
         <button
           type="submit"
-          disabled={isSubmitting || !contentType || !secondaryCategoryId}
+          disabled={isSubmitting || files.length === 0 || !secondaryCategoryId}
           className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-purple-600 px-5 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:focus:ring-offset-gray-900"
         >
-          {isSubmitting ? '上传处理中...' : '提交上传'}
+          {isSubmitting
+            ? '上传处理中...'
+            : files.length > 1
+              ? `批量上传 ${files.length} 个文件`
+              : '提交上传'}
         </button>
       </form>
     </>

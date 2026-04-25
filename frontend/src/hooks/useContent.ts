@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react'
 import axios, { type AxiosProgressEvent } from 'axios'
 import api from '@/services/api'
-import type { Content, ContentCreate, ContentListOut } from '@/types'
+import type { Content, ContentBatchCreate, ContentCreate, ContentListOut } from '@/types'
 
 interface ListParams {
   status?: string
@@ -51,6 +51,14 @@ export function useContent() {
     [],
   )
 
+  const createContentsBatch = useCallback(
+    async (payload: ContentBatchCreate): Promise<Content[]> => {
+      const { data } = await api.post<Content[]>('/contents/batch', payload)
+      return data
+    },
+    [],
+  )
+
   const uploadToPresignedUrl = useCallback(
     async (
       uploadUrl: string,
@@ -87,6 +95,7 @@ export function useContent() {
     listContents,
     getPresignedUrl,
     createContent,
+    createContentsBatch,
     uploadToPresignedUrl,
     recordView,
     recordDownload,
