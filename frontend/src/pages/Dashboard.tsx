@@ -9,6 +9,7 @@ import { useContent } from '@/hooks/useContent'
 import { useSearch } from '@/hooks/useSearch'
 import { useSystem } from '@/hooks/useSystem'
 import type { CategoryTree, Content } from '@/types'
+import { getCurrentUserName, track } from '@/utils/track'
 
 const DISCOVERY_TABS = [
   { key: 'latest', label: '最新' },
@@ -59,6 +60,11 @@ export default function Dashboard() {
       .then(setCategoryTree)
       .catch(() => {})
   }, [listCategories])
+
+  // 进入素材广场埋点。
+  useEffect(() => {
+    track('home_visit', { user_name: getCurrentUserName() })
+  }, [])
 
   const primaryCategories = categoryTree
   const secondaryCategories =
@@ -185,6 +191,11 @@ export default function Dashboard() {
     setIsSearchMode(true)
     const results = await semanticSearch(query)
     setItems(results.map((r) => r.content))
+    track('search', {
+      user_name: getCurrentUserName(),
+      query,
+      result_count: results.length,
+    })
   }
 
   function handleClearSearch() {
@@ -194,6 +205,13 @@ export default function Dashboard() {
 
   function handleSelectContent(content: Content) {
     setSelectedContent(content)
+    track('content_view', {
+      user_name: getCurrentUserName(),
+      tab: activeTab,
+      content_id: content.id,
+      content_title: content.title ?? '',
+      content_type: content.content_type,
+    })
     recordView(content.id).then(() => {
       // Update local view count optimistically
       setItems((prev) =>
@@ -203,6 +221,13 @@ export default function Dashboard() {
   }
 
   async function handleDownload(content: Content) {
+    track('content_download', {
+      user_name: getCurrentUserName(),
+      tab: activeTab,
+      content_id: content.id,
+      content_title: content.title ?? '',
+      content_type: content.content_type,
+    })
     try {
       await recordDownload(content.id)
       setItems((prev) =>

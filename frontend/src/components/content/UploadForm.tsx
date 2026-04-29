@@ -6,6 +6,7 @@ import UploadProgressDialog from '@/components/content/UploadProgressDialog'
 import LoadingDots from '@/components/ui/LoadingDots'
 import TagSelector from '@/components/content/TagSelector'
 import type { CategoryTree, ContentBatchItem, ContentType, Tag } from '@/types'
+import { getCurrentUserName, track } from '@/utils/track'
 
 const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'tiff', 'heic', 'heif']
 const VIDEO_EXTENSIONS = ['mp4', 'avi', 'mov', 'wmv', 'flv', 'mkv', 'webm', 'm4v']
@@ -233,6 +234,11 @@ export default function UploadForm({ onSuccess }: Props) {
     const submitFiles = files
     const totalSize = submitFiles.reduce((acc, f) => acc + (f.file.size || 1), 0)
 
+    track('upload_click', {
+      user_name: getCurrentUserName(),
+      file_count: submitFiles.length,
+    })
+
     try {
       // Step 1: request presigned URLs in parallel
       const presignedResults = await Promise.all(
@@ -289,6 +295,10 @@ export default function UploadForm({ onSuccess }: Props) {
       setUploadProgress(100)
       setUploadStage('idle')
       setIsSubmitting(false)
+      track('upload_success', {
+        user_name: getCurrentUserName(),
+        file_count: submitFiles.length,
+      })
       onSuccess?.()
     } catch (submitError: unknown) {
       setIsSubmitting(false)
