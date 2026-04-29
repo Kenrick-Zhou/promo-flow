@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type TouchEvent } from 'react'
+import { useCallback, useEffect, useRef, useState, type TouchEvent } from 'react'
 import { clsx } from 'clsx'
 import ContentGrid from '@/components/content/ContentGrid'
 import ContentDetail from '@/components/content/ContentDetail'
@@ -21,12 +21,16 @@ type DiscoveryTabKey = (typeof DISCOVERY_TABS)[number]['key']
 const TAB_COUNT = DISCOVERY_TABS.length
 const TRACK_STEP_PERCENT = 100 / TAB_COUNT
 const SWIPE_ACTIVATION_DISTANCE = 10
+const PAGE_SIZE = 24
 
 export default function Dashboard() {
-  const { listContents, loading, recordView, recordDownload } = useContent()
+  const { listContents, recordView, recordDownload } = useContent()
   const { semanticSearch, loading: searchLoading } = useSearch()
   const { listCategories } = useSystem()
   const [items, setItems] = useState<Content[]>([])
+  const [total, setTotal] = useState(0)
+  const [isInitialLoading, setIsInitialLoading] = useState(true)
+  const [isLoadingMore, setIsLoadingMore] = useState(false)
   const [activeTab, setActiveTab] = useState<DiscoveryTabKey>('latest')
   const [query, setQuery] = useState('')
   const [isSearchMode, setIsSearchMode] = useState(false)
@@ -39,6 +43,10 @@ export default function Dashboard() {
   const [secondaryCategoryId, setSecondaryCategoryId] = useState<number | null>(null)
   const [contentTypeFilter, setContentTypeFilter] = useState<'image' | 'video' | null>(null)
   const contentViewportRef = useRef<HTMLDivElement | null>(null)
+  const sentinelRef = useRef<HTMLDivElement | null>(null)
+  const loadedCountRef = useRef(0)
+  const totalRef = useRef(0)
+  const requestIdRef = useRef(0)
   const touchSessionRef = useRef<{
     startX: number
     startY: number
@@ -58,33 +66,101 @@ export default function Dashboard() {
       ? (categoryTree.find((c) => c.id === primaryCategoryId)?.children ?? [])
       : []
 
+  const buildListParams = useCallback(
+    (offset: number): Record<string, unknown> => {
+      const params: Record<string, unknown> = {
+        status: 'approved',
+        offset,
+        limit: PAGE_SIZE,
+      }
+      if (activeTab === 'popular') {
+        params.sort_by = 'hot'
+      }
+      if (activeTab === 'all') {
+        if (secondaryCategoryId !== null) {
+          params.category_id = secondaryCategoryId
+        } else if (primaryCategoryId !== null) {
+          params.primary_category_id = primaryCategoryId
+        }
+        if (contentTypeFilter !== null) {
+          params.content_type = contentTypeFilter
+        }
+      }
+      return params
+    },
+    [activeTab, primaryCategoryId, secondaryCategoryId, contentTypeFilter],
+  )
+
+  // Reset & load first page whenever filters/tab change (skip in search mode)
   useEffect(() => {
     if (isSearchMode) return
-    const params: Record<string, unknown> = { status: 'approved' }
-    if (activeTab === 'popular') {
-      params.sort_by = 'hot'
-    }
-    if (activeTab === 'all') {
-      if (secondaryCategoryId !== null) {
-        params.category_id = secondaryCategoryId
-      } else if (primaryCategoryId !== null) {
-        params.primary_category_id = primaryCategoryId
+    const reqId = ++requestIdRef.current
+    setIsInitialLoading(true)
+    setItems([])
+    loadedCountRef.current = 0
+    totalRef.current = 0
+    setTotal(0)
+    listContents(buildListParams(0))
+      .then((r) => {
+        if (reqId !== requestIdRef.current) return
+        setItems(r.items)
+        setTotal(r.total)
+        loadedCountRef.current = r.items.length
+        totalRef.current = r.total
+      })
+      .catch(() => {
+        // listContents already surfaces error state internally
+      })
+      .finally(() => {
+        if (reqId === requestIdRef.current) {
+          setIsInitialLoading(false)
+        }
+      })
+  }, [isSearchMode, buildListParams, listContents])
+
+  const loadMore = useCallback(async () => {
+    if (isSearchMode) return
+    if (isLoadingMore || isInitialLoading) return
+    if (loadedCountRef.current >= totalRef.current) return
+
+    const reqId = ++requestIdRef.current
+    setIsLoadingMore(true)
+    try {
+      const r = await listContents(buildListParams(loadedCountRef.current))
+      if (reqId !== requestIdRef.current) return
+      setItems((prev) => {
+        const seen = new Set(prev.map((it) => it.id))
+        const merged = [...prev, ...r.items.filter((it) => !seen.has(it.id))]
+        loadedCountRef.current = merged.length
+        return merged
+      })
+      totalRef.current = r.total
+      setTotal(r.total)
+    } catch {
+      // ignore; next intersection will retry
+    } finally {
+      if (reqId === requestIdRef.current) {
+        setIsLoadingMore(false)
       }
-      if (contentTypeFilter !== null) {
-        params.content_type = contentTypeFilter
-      }
     }
-    listContents(params).then((r) => {
-      setItems(r.items)
-    })
-  }, [
-    listContents,
-    isSearchMode,
-    activeTab,
-    primaryCategoryId,
-    secondaryCategoryId,
-    contentTypeFilter,
-  ])
+  }, [isSearchMode, isLoadingMore, isInitialLoading, listContents, buildListParams])
+
+  // Infinite scroll observer
+  useEffect(() => {
+    if (isSearchMode) return
+    const el = sentinelRef.current
+    if (!el) return
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) {
+          void loadMore()
+        }
+      },
+      { rootMargin: '400px 0px' },
+    )
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [isSearchMode, loadMore])
 
   useEffect(() => {
     if (!showDownloadToast) {
@@ -224,7 +300,7 @@ export default function Dashboard() {
     setIsDragging(false)
   }
 
-  const isLoading = loading || searchLoading
+  const isLoading = isInitialLoading || searchLoading
   const activeTabIndex = DISCOVERY_TABS.findIndex((tab) => tab.key === activeTab)
   const contentSection = isLoading ? (
     <LoadingDots label="素材广场加载中…" />
@@ -368,6 +444,27 @@ export default function Dashboard() {
           ))}
         </div>
       </div>
+
+      {!isSearchMode && !isInitialLoading && items.length > 0 && (
+        <>
+          <div ref={sentinelRef} aria-hidden="true" className="h-1" />
+          <div className="mt-6 mb-4 flex justify-center text-sm text-gray-500 dark:text-gray-400">
+            {isLoadingMore ? (
+              <LoadingDots label="加载更多中…" />
+            ) : loadedCountRef.current < total ? (
+              <button
+                type="button"
+                onClick={() => void loadMore()}
+                className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm text-gray-600 transition hover:border-purple-300 hover:text-purple-700 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:border-purple-500/40 dark:hover:text-purple-300"
+              >
+                加载更多
+              </button>
+            ) : (
+              <span>· 已加载全部 {total} 条 ·</span>
+            )}
+          </div>
+        </>
+      )}
 
       {selectedContent && (
         <ContentDetail content={selectedContent} onClose={() => setSelectedContent(null)} />
