@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom'
-import { LayoutGrid, Plus, User } from 'lucide-react'
+import { LayoutGrid, User } from 'lucide-react'
 import { clsx } from 'clsx'
 
 const tabs = [
@@ -27,12 +27,12 @@ export default function TabBar() {
           <span>{tabs[0].label}</span>
         </Link>
 
-        {/* 中间 + 号按钮 */}
+        {/* 中间 Logo 按钮 */}
         <Link
           to="/upload"
-          className="flex -mt-5 size-12 items-center justify-center rounded-full bg-purple-600 text-white shadow-lg transition-transform active:scale-95 hover:bg-purple-700"
+          className="-mt-7 block size-14 rounded-full shadow-[0_6px_20px_rgba(0,0,0,0.22),0_2px_6px_rgba(0,0,0,0.12)] transition-all active:scale-95 hover:scale-105 hover:shadow-[0_10px_28px_rgba(0,0,0,0.28),0_3px_8px_rgba(0,0,0,0.16)]"
         >
-          <Plus className="size-7" />
+          <img src="/logo.png" alt="上传" className="size-14 rounded-full" />
         </Link>
 
         {/* 我的 */}
