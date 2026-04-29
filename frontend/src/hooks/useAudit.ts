@@ -14,6 +14,8 @@ interface MetadataEdit {
 
 interface ListAuditItemsOptions {
   silent?: boolean
+  offset?: number
+  limit?: number
 }
 
 export function useAudit() {
@@ -22,7 +24,7 @@ export function useAudit() {
 
   const listAuditItems = useCallback(
     async (status: ContentStatus, options: ListAuditItemsOptions = {}): Promise<ContentListOut> => {
-      const { silent = false } = options
+      const { silent = false, offset, limit } = options
 
       if (!silent) {
         setLoading(true)
@@ -31,7 +33,7 @@ export function useAudit() {
 
       try {
         const { data } = await api.get<ContentListOut>('/contents', {
-          params: { status },
+          params: { status, offset, limit },
         })
         return data
       } catch (e: unknown) {

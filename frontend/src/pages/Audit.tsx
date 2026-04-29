@@ -3,6 +3,7 @@ import { RefreshCw } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import PageHeader from '@/components/layout/PageHeader'
 import MediaPreview from '@/components/ui/MediaPreview'
+import Pagination from '@/components/ui/Pagination'
 import { useAudit } from '@/hooks/useAudit'
 import type { Content, ContentListOut, ContentStatus, ContentType } from '@/types'
 import { navigateBack } from '@/utils/navigation'
@@ -13,6 +14,8 @@ const AUDIT_TABS: Array<{ key: ContentStatus; label: string }> = [
   { key: 'approved', label: '已通过' },
   { key: 'rejected', label: '已拒绝' },
 ]
+
+const PAGE_SIZE = 20
 
 const STATUS_BADGES: Record<ContentStatus, { text: string; className: string }> = {
   pending: { text: '待审核', className: 'bg-yellow-100 text-yellow-700' },
@@ -26,6 +29,7 @@ export default function Audit() {
   const [activeStatus, setActiveStatus] = useState<ContentStatus>('pending')
   const [items, setItems] = useState<Content[]>([])
   const [total, setTotal] = useState(0)
+  const [page, setPage] = useState(1)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [editTitle, setEditTitle] = useState('')
   const [editSummary, setEditSummary] = useState('')
@@ -36,8 +40,11 @@ export default function Audit() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [previewType, setPreviewType] = useState<ContentType>('image')
   const activeStatusRef = useRef<ContentStatus>('pending')
+  const pageRef = useRef(1)
   const fingerprintRef = useRef('')
   const requestIdRef = useRef(0)
+
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
 
   const buildFingerprint = useCallback((data: ContentListOut) => {
     return JSON.stringify({
@@ -74,13 +81,16 @@ export default function Audit() {
       showIndicator = false,
       showLoader = false,
       status,
+      page: pageOverride,
     }: {
       force?: boolean
       showIndicator?: boolean
       showLoader?: boolean
       status?: ContentStatus
+      page?: number
     } = {}) => {
       const targetStatus = status ?? activeStatusRef.current
+      const targetPage = pageOverride ?? pageRef.current
       const requestId = requestIdRef.current + 1
 
       requestIdRef.current = requestId
@@ -94,7 +104,11 @@ export default function Audit() {
       }
 
       try {
-        const data = await listAuditItems(targetStatus, { silent: true })
+        const data = await listAuditItems(targetStatus, {
+          silent: true,
+          offset: (targetPage - 1) * PAGE_SIZE,
+          limit: PAGE_SIZE,
+        })
 
         if (requestId !== requestIdRef.current) {
           return
@@ -104,6 +118,15 @@ export default function Audit() {
 
         if (force || nextFingerprint !== fingerprintRef.current) {
           applyAuditData(data)
+        }
+
+        // If current page is empty but there are still items, fall back to last page
+        if (data.items.length === 0 && data.total > 0 && targetPage > 1) {
+          const lastPage = Math.max(1, Math.ceil(data.total / PAGE_SIZE))
+          if (lastPage !== targetPage) {
+            pageRef.current = lastPage
+            setPage(lastPage)
+          }
         }
 
         setRefreshError(null)
@@ -133,9 +156,11 @@ export default function Audit() {
 
   useEffect(() => {
     activeStatusRef.current = activeStatus
+    pageRef.current = 1
+    setPage(1)
     setEditingId(null)
     setRefreshError(null)
-    void refreshAuditItems({ status: activeStatus, force: true, showLoader: true })
+    void refreshAuditItems({ status: activeStatus, page: 1, force: true, showLoader: true })
   }, [activeStatus, refreshAuditItems])
 
   useEffect(() => {
@@ -144,15 +169,33 @@ export default function Audit() {
     }
 
     const timer = window.setInterval(() => {
-      void refreshAuditItems({ status: activeStatus })
+      void refreshAuditItems({ status: activeStatus, page: pageRef.current })
     }, 10000)
 
     return () => window.clearInterval(timer)
   }, [activeStatus, editingId, refreshAuditItems])
 
+  function handlePageChange(nextPage: number) {
+    if (nextPage < 1 || nextPage > totalPages || nextPage === page) {
+      return
+    }
+    pageRef.current = nextPage
+    setPage(nextPage)
+    setEditingId(null)
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    }
+    void refreshAuditItems({
+      status: activeStatusRef.current,
+      page: nextPage,
+      force: true,
+      showLoader: true,
+    })
+  }
+
   async function handleAudit(id: number, status: 'approved' | 'rejected', comments?: string) {
     await submitAudit(id, { status, comments })
-    await refreshAuditItems({ force: true, status: activeStatusRef.current })
+    await refreshAuditItems({ force: true, status: activeStatusRef.current, page: pageRef.current })
   }
 
   function startEdit(item: Content) {
@@ -224,7 +267,7 @@ export default function Audit() {
         </div>
       </div>
 
-      <div className="mb-4 flex items-center gap-3">
+      <div className="mb-4 flex flex-wrap items-center gap-3">
         <button
           type="button"
           onClick={() =>
@@ -232,6 +275,7 @@ export default function Audit() {
               force: true,
               showIndicator: true,
               status: activeStatus,
+              page: pageRef.current,
             })
           }
           disabled={refreshing}
@@ -245,6 +289,11 @@ export default function Audit() {
         >
           {currentTab.label} {total} 个
         </span>
+        {total > 0 && (
+          <span className="inline-flex items-center rounded-full bg-gray-100 px-3 py-1 text-sm text-gray-600 dark:bg-gray-700 dark:text-gray-300">
+            第 {page} / {totalPages} 页
+          </span>
+        )}
       </div>
 
       {refreshError && (
@@ -432,6 +481,15 @@ export default function Audit() {
               <p className="text-sm">暂无{currentTab.label}内容</p>
             </div>
           )}
+        </div>
+      )}
+
+      {!isLoadingList && totalPages > 1 && (
+        <div className="mt-8 mb-4 flex flex-col items-center gap-2">
+          <Pagination page={page} totalPages={totalPages} onPageChange={handlePageChange} />
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            第 {page} / {totalPages} 页 · 共 {total} 条
+          </p>
         </div>
       )}
 
