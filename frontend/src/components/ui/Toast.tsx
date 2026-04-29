@@ -11,7 +11,7 @@ export default function Toast({ open, title, description }: Props) {
 
   return (
     <div
-      className="pointer-events-none fixed inset-x-4 bottom-24 z-40 flex justify-center sm:inset-x-auto sm:right-6 sm:top-6 sm:bottom-auto"
+      className="pointer-events-none fixed inset-x-4 bottom-24 z-[60] flex justify-center sm:inset-x-auto sm:right-6 sm:top-6 sm:bottom-auto"
       aria-live="polite"
       aria-atomic="true"
     >

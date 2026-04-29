@@ -1,13 +1,14 @@
 import { useCallback, useEffect } from 'react'
-import { X } from 'lucide-react'
+import { Download, X } from 'lucide-react'
 import type { Content } from '@/types'
 
 interface Props {
   content: Content
   onClose: () => void
+  onDownload?: (content: Content) => void
 }
 
-export default function ContentDetail({ content, onClose }: Props) {
+export default function ContentDetail({ content, onClose, onDownload }: Props) {
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose()
@@ -48,9 +49,22 @@ export default function ContentDetail({ content, onClose }: Props) {
 
       {/* 媒体区域 */}
       <div
-        className="flex flex-1 items-center justify-center p-6 overflow-hidden"
+        className="relative flex flex-1 items-center justify-center p-6 overflow-hidden"
         onClick={handleBackdropClick}
       >
+        {onDownload && content.file_url && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              onDownload(content)
+            }}
+            className="absolute bottom-4 right-4 z-10 flex size-10 items-center justify-center rounded-full bg-black/50 text-white transition hover:bg-black/70"
+            aria-label="下载"
+          >
+            <Download className="size-5" />
+          </button>
+        )}
         {content.file_url && content.content_type === 'video' ? (
           <video
             src={content.file_url}
@@ -75,22 +89,24 @@ export default function ContentDetail({ content, onClose }: Props) {
       </div>
 
       {/* 底部详情栏 */}
-      <div className="shrink-0 bg-white dark:bg-gray-900" onClick={(e) => e.stopPropagation()}>
-        <div className="mx-auto max-w-4xl px-6 py-4 flex flex-wrap items-start gap-x-8 gap-y-3">
-          <div className="min-w-0 flex-1">
-            <h3 className="text-sm font-semibold text-gray-900 dark:text-white truncate">
+      <div
+        className="shrink-0 max-h-[55vh] overflow-y-auto bg-white dark:bg-gray-900"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mx-auto flex max-w-4xl flex-col gap-4 px-6 pt-4 pb-20">
+          <div>
+            <h3 className="text-sm font-semibold text-gray-900 break-words dark:text-white">
               {content.title ?? '待AI生成'}
             </h3>
-            {content.description && (
-              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400 line-clamp-2">
-                {content.description}
+            {(content.primary_category_name ?? content.category_name) && (
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                {[content.primary_category_name, content.category_name].filter(Boolean).join(' / ')}
               </p>
             )}
           </div>
 
           {content.tags.length > 0 && (
-            <div className="shrink-0">
-              <p className="mb-1 text-xs font-medium text-gray-400 dark:text-gray-500">标签</p>
+            <div>
               <div className="flex flex-wrap gap-1">
                 {content.tags.map((t) => (
                   <span
@@ -104,8 +120,17 @@ export default function ContentDetail({ content, onClose }: Props) {
             </div>
           )}
 
+          {content.description && (
+            <div>
+              <p className="mb-1 text-xs font-medium text-gray-400 dark:text-gray-500">描述</p>
+              <p className="text-xs text-gray-500 break-words dark:text-gray-400">
+                {content.description}
+              </p>
+            </div>
+          )}
+
           {content.ai_keywords.length > 0 && (
-            <div className="shrink-0">
+            <div>
               <p className="mb-1 text-xs font-medium text-gray-400 dark:text-gray-500">AI 关键词</p>
               <div className="flex flex-wrap gap-1">
                 {content.ai_keywords.map((kw) => (
@@ -121,15 +146,15 @@ export default function ContentDetail({ content, onClose }: Props) {
           )}
 
           {content.ai_summary && (
-            <div className="w-full">
+            <div>
               <p className="mb-1 text-xs font-medium text-gray-400 dark:text-gray-500">AI 摘要</p>
-              <p className="text-xs italic text-gray-500 dark:text-gray-400 line-clamp-2">
+              <p className="text-xs italic text-gray-500 break-words dark:text-gray-400">
                 {content.ai_summary}
               </p>
             </div>
           )}
 
-          <p className="w-full text-xs text-gray-400 dark:text-gray-500">
+          <p className="text-xs text-gray-400 dark:text-gray-500">
             — by {content.uploaded_by_name}
           </p>
         </div>

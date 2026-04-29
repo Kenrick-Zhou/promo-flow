@@ -492,7 +492,11 @@ export default function Dashboard() {
       )}
 
       {selectedContent && (
-        <ContentDetail content={selectedContent} onClose={() => setSelectedContent(null)} />
+        <ContentDetail
+          content={selectedContent}
+          onClose={() => setSelectedContent(null)}
+          onDownload={handleDownload}
+        />
       )}
 
       <Toast
