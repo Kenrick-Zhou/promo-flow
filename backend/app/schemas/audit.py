@@ -172,12 +172,22 @@ class SearchResultOut(BaseModel):
 
 class ContentMetadataEditIn(BaseModel):
     title: str | None = Field(None, max_length=256)
+    description: str | None = None
     ai_summary: str | None = None
+    tag_names: list[str] | None = None
+    category_id: int | None = None
+    ai_keywords: list[str] | None = None
+    thumbnail_key: str | None = Field(None, max_length=512)
 
     def to_domain(self, *, content_id: int) -> EditContentMetadataCommand:
         """Convert HTTP request to domain command."""
         return EditContentMetadataCommand(
             content_id=content_id,
             title=self.title,
+            description=self.description,
             ai_summary=self.ai_summary,
+            tag_names=self.tag_names,
+            category_id=self.category_id,
+            ai_keywords=self.ai_keywords,
+            thumbnail_key=self.thumbnail_key,
         )

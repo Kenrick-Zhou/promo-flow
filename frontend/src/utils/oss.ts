@@ -15,7 +15,13 @@ export function getThumbnailUrl(
   contentType: ContentType,
   width: number = 400,
   height: number = 400,
+  thumbnailUrl?: string | null,
 ): string | null {
+  // Custom thumbnail (uploaded by reviewer) overrides default behavior
+  if (thumbnailUrl) {
+    return `${thumbnailUrl}?x-oss-process=image/resize,m_lfit,w_${width},h_${height}`
+  }
+
   if (!fileUrl) return null
 
   if (contentType === 'image') {

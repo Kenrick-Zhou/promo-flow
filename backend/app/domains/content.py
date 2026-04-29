@@ -119,11 +119,20 @@ class SearchContentCommand:
 
 @dataclass(slots=True)
 class EditContentMetadataCommand:
-    """Command for reviewer editing title/summary."""
+    """Command for reviewer editing pending content metadata.
+
+    All fields are optional; only fields explicitly set (non-None) are applied.
+    Use empty list to clear tags / keywords; use empty string to clear summary.
+    """
 
     content_id: int
     title: str | None = None
+    description: str | None = None
     ai_summary: str | None = None
+    tag_names: list[str] | None = None
+    category_id: int | None = None
+    ai_keywords: list[str] | None = None
+    thumbnail_key: str | None = None
 
 
 # ============================================================
@@ -160,6 +169,8 @@ class ContentOutput:
     primary_category_name: str | None
     created_at: str
     updated_at: str
+    thumbnail_key: str | None = None
+    thumbnail_url: str | None = None
 
 
 @dataclass(slots=True)

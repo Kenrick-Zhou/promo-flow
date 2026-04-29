@@ -90,6 +90,8 @@ class ContentOut(BaseModel):
     file_size: int | None
     media_width: int | None
     media_height: int | None
+    thumbnail_key: str | None
+    thumbnail_url: str | None
     view_count: int
     download_count: int
     ai_summary: str | None
@@ -120,6 +122,8 @@ class ContentOut(BaseModel):
             file_size=output.file_size,
             media_width=output.media_width,
             media_height=output.media_height,
+            thumbnail_key=output.thumbnail_key,
+            thumbnail_url=output.thumbnail_url,
             view_count=output.view_count,
             download_count=output.download_count,
             ai_summary=output.ai_summary,

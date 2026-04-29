@@ -9,7 +9,12 @@ interface AuditDecision {
 
 interface MetadataEdit {
   title?: string
+  description?: string
   ai_summary?: string
+  tag_names?: string[]
+  category_id?: number
+  ai_keywords?: string[]
+  thumbnail_key?: string | null
 }
 
 interface ListAuditItemsOptions {

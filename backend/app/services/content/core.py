@@ -58,6 +58,10 @@ def _content_to_output(content: Content) -> ContentOutput:
         file_size=content.file_size,
         media_width=content.media_width,
         media_height=content.media_height,
+        thumbnail_key=content.thumbnail_key,
+        thumbnail_url=(
+            get_public_url(content.thumbnail_key) if content.thumbnail_key else None
+        ),
         view_count=content.view_count,
         download_count=content.download_count,
         ai_summary=content.ai_summary,
@@ -479,14 +483,102 @@ async def edit_content_metadata(
     *,
     command: EditContentMetadataCommand,
 ) -> ContentOutput:
-    """Allow reviewer/admin to edit content title and/or summary."""
+    """Allow reviewer/admin to edit pending content metadata.
+
+    Supports updating title, ai_summary, tags, ai_keywords, category and
+    (for videos) a custom thumbnail object key. All fields are optional.
+    """
     content = await get_content_orm(db, command.content_id)
     if command.title is not None:
         content.title = command.title
+    if command.description is not None:
+        content.description = command.description
     if command.ai_summary is not None:
         content.ai_summary = command.ai_summary
+    if command.ai_keywords is not None:
+        content.ai_keywords = command.ai_keywords
+    if command.tag_names is not None:
+        content.tag_objects = await _find_or_create_tags(db, command.tag_names)
+    if command.category_id is not None:
+        category = await db.get(Category, command.category_id)
+        if category is None:
+            raise InvalidCategoryError("指定的类目不存在。")
+        if category.parent_id is None:
+            raise InvalidCategoryError("素材必须归属到二级类目。")
+        content.category_id = command.category_id
+    if command.thumbnail_key is not None:
+        content.thumbnail_key = command.thumbnail_key or None
     await db.commit()
     return await get_content(db, command.content_id)
+
+
+async def reindex_content_search(db: AsyncSession, content_id: int) -> None:
+    """Rebuild search_document, embedding_text and embedding for a content.
+
+    Called after metadata edits so that searches reflect updated fields. Uses
+    current persisted values; safe to skip if AI analysis has not run yet.
+    """
+    import logging
+
+    from app.services.infrastructure.ai import generate_embedding
+    from app.services.search.document_builder import (
+        build_embedding_text,
+        build_search_document,
+    )
+
+    logger = logging.getLogger(__name__)
+
+    content = await get_content_orm(db, content_id)
+    title = content.title
+    description = content.description
+    tag_names = [t.name for t in content.tag_objects]
+    ai_keywords = list(content.ai_keywords or [])
+    ai_summary = content.ai_summary
+    category = content.category
+    category_name = category.name if category else None
+    primary_category_name = (
+        category.parent.name if category and category.parent else None
+    )
+    content_type = (
+        content.content_type.value
+        if hasattr(content.content_type, "value")
+        else str(content.content_type)
+    )
+
+    search_doc = build_search_document(
+        title=title,
+        description=description,
+        tag_names=tag_names,
+        ai_keywords=ai_keywords,
+        ai_summary=ai_summary,
+        category_name=category_name,
+        primary_category_name=primary_category_name,
+        content_type=content_type,
+    )
+    emb_text = build_embedding_text(
+        title=title,
+        description=description,
+        tag_names=tag_names,
+        ai_keywords=ai_keywords,
+        ai_summary=ai_summary,
+        category_name=category_name,
+        primary_category_name=primary_category_name,
+        content_type=content_type,
+    )
+
+    content.search_document = search_doc
+    content.embedding_text = emb_text
+
+    if emb_text.strip():
+        try:
+            embedding = await generate_embedding(emb_text)
+            content.embedding = embedding
+        except Exception:
+            logger.exception(
+                "Failed to regenerate embedding for content %s", content_id
+            )
+
+    await db.commit()
 
 
 async def increment_view_count(db: AsyncSession, content_id: int) -> None:

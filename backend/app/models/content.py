@@ -42,6 +42,9 @@ class Content(Base):
     file_size: Mapped[int | None] = mapped_column(Integer, nullable=True)  # bytes
     media_width: Mapped[int | None] = mapped_column(Integer, nullable=True)
     media_height: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Custom thumbnail (OSS object key) - currently used for video covers
+    # uploaded by reviewers to override the default first-frame snapshot.
+    thumbnail_key: Mapped[str | None] = mapped_column(String(512), nullable=True)
 
     # Counters
     view_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

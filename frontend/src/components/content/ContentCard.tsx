@@ -22,7 +22,13 @@ export default function ContentCard({ content, onClick, onDownload }: ContentCar
     content.ai_status === 'completed'
       ? (content.title ?? '未命名')
       : (aiStatusText[content.ai_status] ?? content.title ?? '未命名')
-  const thumbUrl = getThumbnailUrl(content.file_url, content.content_type, 600, 0)
+  const thumbUrl = getThumbnailUrl(
+    content.file_url,
+    content.content_type,
+    600,
+    0,
+    content.thumbnail_url,
+  )
   const aspectRatio =
     content.media_width && content.media_height
       ? content.media_width / content.media_height

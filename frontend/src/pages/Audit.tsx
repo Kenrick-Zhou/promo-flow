@@ -1,11 +1,22 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { RefreshCw } from 'lucide-react'
+import { RefreshCw, Upload as UploadIcon, X } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import PageHeader from '@/components/layout/PageHeader'
+import CategorySelector from '@/components/content/CategorySelector'
+import TagSelector from '@/components/content/TagSelector'
 import MediaPreview from '@/components/ui/MediaPreview'
 import Pagination from '@/components/ui/Pagination'
 import { useAudit } from '@/hooks/useAudit'
-import type { Content, ContentListOut, ContentStatus, ContentType } from '@/types'
+import { useContent } from '@/hooks/useContent'
+import { useSystem } from '@/hooks/useSystem'
+import type {
+  CategoryTree,
+  Content,
+  ContentListOut,
+  ContentStatus,
+  ContentType,
+  Tag,
+} from '@/types'
 import { navigateBack } from '@/utils/navigation'
 import { getThumbnailUrl } from '@/utils/oss'
 
@@ -23,16 +34,125 @@ const STATUS_BADGES: Record<ContentStatus, { text: string; className: string }> 
   rejected: { text: '已拒绝', className: 'bg-red-100 text-red-700' },
 }
 
+interface EditState {
+  title: string
+  description: string
+  summary: string
+  tags: string[]
+  primaryId: number | null
+  secondaryId: number | null
+  keywords: string[]
+  thumbnailKey: string | null
+  thumbnailUrl: string | null
+}
+
+function findPrimaryId(categories: CategoryTree[], secondaryId: number | null): number | null {
+  if (!secondaryId) return null
+  for (const primary of categories) {
+    if (primary.children?.some((c) => c.id === secondaryId)) {
+      return primary.id
+    }
+  }
+  return null
+}
+
+function buildCategoryPath(item: Content): string {
+  const parts = [item.primary_category_name, item.category_name].filter((p): p is string =>
+    Boolean(p && p.trim()),
+  )
+  return parts.length > 0 ? parts.join(' / ') : '暂未分类'
+}
+
+interface KeywordEditorProps {
+  keywords: string[]
+  onChange: (keywords: string[]) => void
+}
+
+function KeywordEditor({ keywords, onChange }: KeywordEditorProps) {
+  const [input, setInput] = useState('')
+
+  function add() {
+    const value = input.trim()
+    if (!value || keywords.includes(value)) {
+      setInput('')
+      return
+    }
+    onChange([...keywords, value])
+    setInput('')
+  }
+
+  function remove(value: string) {
+    onChange(keywords.filter((k) => k !== value))
+  }
+
+  return (
+    <div className="space-y-2">
+      <label className="block text-xs font-medium text-gray-600 dark:text-gray-300">
+        AI 关键词
+      </label>
+      <div className="flex flex-wrap gap-1.5">
+        {keywords.length === 0 && (
+          <span className="text-xs text-gray-400 dark:text-gray-500">暂无关键词</span>
+        )}
+        {keywords.map((kw) => (
+          <span
+            key={kw}
+            className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
+          >
+            {kw}
+            <button
+              type="button"
+              onClick={() => remove(kw)}
+              className="rounded-full p-0.5 hover:bg-blue-100 dark:hover:bg-blue-800/40"
+              aria-label={`移除关键词 ${kw}`}
+            >
+              <X className="size-3" />
+            </button>
+          </span>
+        ))}
+      </div>
+      <div className="flex gap-2">
+        <input
+          type="text"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              add()
+            }
+          }}
+          placeholder="输入新关键词，回车添加"
+          className="flex-1 rounded-md border border-gray-300 px-2 py-1 text-xs text-gray-700 focus:border-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200"
+        />
+        <button
+          type="button"
+          onClick={add}
+          className="rounded-md bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700 transition hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50"
+        >
+          添加
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export default function Audit() {
   const navigate = useNavigate()
   const { listAuditItems, submitAudit, editMetadata } = useAudit()
+  const { listCategories, listTags } = useSystem()
+  const { getPresignedUrl, uploadToPresignedUrl } = useContent()
   const [activeStatus, setActiveStatus] = useState<ContentStatus>('pending')
   const [items, setItems] = useState<Content[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
   const [editingId, setEditingId] = useState<number | null>(null)
-  const [editTitle, setEditTitle] = useState('')
-  const [editSummary, setEditSummary] = useState('')
+  const [edit, setEdit] = useState<EditState | null>(null)
+  const [savingEdit, setSavingEdit] = useState(false)
+  const [editError, setEditError] = useState<string | null>(null)
+  const [thumbUploading, setThumbUploading] = useState(false)
+  const [categories, setCategories] = useState<CategoryTree[]>([])
+  const [availableTags, setAvailableTags] = useState<Tag[]>([])
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false)
   const [isLoadingList, setIsLoadingList] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -163,6 +283,23 @@ export default function Audit() {
     void refreshAuditItems({ status: activeStatus, page: 1, force: true, showLoader: true })
   }, [activeStatus, refreshAuditItems])
 
+  // Load categories + tags once for the editor.
+  useEffect(() => {
+    let cancelled = false
+    Promise.all([listCategories(), listTags()])
+      .then(([cats, tags]) => {
+        if (cancelled) return
+        setCategories(cats)
+        setAvailableTags(tags)
+      })
+      .catch(() => {
+        // Editor will degrade gracefully when these are empty.
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [listCategories, listTags])
+
   useEffect(() => {
     if (editingId !== null || activeStatus !== 'pending') {
       return
@@ -200,22 +337,81 @@ export default function Audit() {
 
   function startEdit(item: Content) {
     setEditingId(item.id)
-    setEditTitle(item.title ?? '')
-    setEditSummary(item.ai_summary ?? '')
+    setEditError(null)
+    setEdit({
+      title: item.title ?? '',
+      description: item.description ?? '',
+      summary: item.ai_summary ?? '',
+      tags: [...item.tags],
+      primaryId: findPrimaryId(categories, item.category_id),
+      secondaryId: item.category_id,
+      keywords: [...item.ai_keywords],
+      thumbnailKey: item.thumbnail_key,
+      thumbnailUrl: item.thumbnail_url,
+    })
+  }
+
+  function updateEdit(patch: Partial<EditState>) {
+    setEdit((prev) => (prev ? { ...prev, ...patch } : prev))
+  }
+
+  async function handleThumbnailUpload(file: File) {
+    if (!edit) return
+    if (!file.type.startsWith('image/')) {
+      setEditError('请上传图片格式的缩略图。')
+      return
+    }
+    setEditError(null)
+    setThumbUploading(true)
+    try {
+      const presigned = await getPresignedUrl(file.name, file.type)
+      await uploadToPresignedUrl(presigned.upload_url, file, presigned.upload_headers)
+      // Build a public URL by stripping the presigned query string.
+      const publicUrl = presigned.upload_url.split('?')[0] ?? null
+      updateEdit({ thumbnailKey: presigned.file_key, thumbnailUrl: publicUrl })
+    } catch {
+      setEditError('缩略图上传失败，请重试。')
+    } finally {
+      setThumbUploading(false)
+    }
   }
 
   async function saveEdit(id: number) {
-    const updated = await editMetadata(id, { title: editTitle, ai_summary: editSummary })
-    setItems((prev) => {
-      const nextItems = prev.map((item) => (item.id === id ? updated : item))
-      fingerprintRef.current = buildFingerprint({ items: nextItems, total })
-      return nextItems
-    })
-    setEditingId(null)
+    if (!edit) return
+    if (!edit.secondaryId) {
+      setEditError('请选择二级类目。')
+      return
+    }
+    setEditError(null)
+    setSavingEdit(true)
+    try {
+      const updated = await editMetadata(id, {
+        title: edit.title,
+        description: edit.description,
+        ai_summary: edit.summary,
+        tag_names: edit.tags,
+        category_id: edit.secondaryId,
+        ai_keywords: edit.keywords,
+        thumbnail_key: edit.thumbnailKey,
+      })
+      setItems((prev) => {
+        const nextItems = prev.map((item) => (item.id === id ? updated : item))
+        fingerprintRef.current = buildFingerprint({ items: nextItems, total })
+        return nextItems
+      })
+      setEditingId(null)
+      setEdit(null)
+    } catch {
+      setEditError('保存失败，请稍后重试。')
+    } finally {
+      setSavingEdit(false)
+    }
   }
 
   function cancelEdit() {
     setEditingId(null)
+    setEdit(null)
+    setEditError(null)
   }
 
   function openPreview(item: Content) {
@@ -322,8 +518,17 @@ export default function Audit() {
                 <div className="flex">
                   {/* Thumbnail */}
                   {(() => {
-                    const thumbUrl = getThumbnailUrl(item.file_url, item.content_type, 300, 300)
-                    if (thumbUrl) {
+                    const previewThumbUrl =
+                      isEditing && edit?.thumbnailUrl
+                        ? `${edit.thumbnailUrl}?x-oss-process=image/resize,m_lfit,w_300,h_300`
+                        : getThumbnailUrl(
+                            item.file_url,
+                            item.content_type,
+                            300,
+                            300,
+                            item.thumbnail_url,
+                          )
+                    if (previewThumbUrl) {
                       return (
                         <button
                           type="button"
@@ -332,7 +537,7 @@ export default function Audit() {
                           aria-label="预览媒体"
                         >
                           <img
-                            src={thumbUrl}
+                            src={previewThumbUrl}
                             alt={item.title ?? '缩略图'}
                             className="h-full w-full object-cover"
                           />
@@ -369,12 +574,13 @@ export default function Audit() {
                             {aiBadge.text}
                           </span>
                         )}
-                        {isEditing ? (
+                        {isEditing && edit ? (
                           <input
                             type="text"
-                            value={editTitle}
-                            onChange={(e) => setEditTitle(e.target.value)}
+                            value={edit.title}
+                            onChange={(e) => updateEdit({ title: e.target.value })}
                             className="min-w-0 flex-1 rounded-md border border-gray-300 px-2 py-1 text-sm font-semibold text-gray-900 focus:border-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                            placeholder="标题"
                           />
                         ) : (
                           <h3 className="min-w-0 font-semibold text-gray-900 dark:text-white">
@@ -382,47 +588,138 @@ export default function Audit() {
                           </h3>
                         )}
                       </div>
-                      <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                        {item.description}
-                      </p>
-                      <div className="mt-2 flex flex-wrap items-center gap-1">
-                        {item.tags.map((t) => (
-                          <span
-                            key={t}
-                            className="inline-flex items-center rounded-md bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600 dark:bg-gray-700 dark:text-gray-300"
-                          >
-                            {t}
-                          </span>
-                        ))}
-                      </div>
-                      {item.ai_keywords.length > 0 && (
-                        <div className="mt-2 flex flex-wrap gap-1">
-                          <span className="text-xs text-gray-400 dark:text-gray-500">
-                            AI 关键词：
-                          </span>
-                          {item.ai_keywords.map((kw) => (
-                            <span
-                              key={kw}
-                              className="inline-flex items-center rounded-md bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-600 dark:bg-blue-900/30 dark:text-blue-300"
-                            >
-                              {kw}
-                            </span>
-                          ))}
-                        </div>
+                      {!isEditing && (
+                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                          分类：{buildCategoryPath(item)}
+                        </p>
                       )}
-                      {isEditing ? (
-                        <textarea
-                          value={editSummary}
-                          onChange={(e) => setEditSummary(e.target.value)}
-                          rows={2}
-                          className="mt-2 w-full rounded-md border border-gray-300 px-2 py-1 text-xs text-gray-600 focus:border-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300"
-                        />
+                      {!isEditing && item.description && (
+                        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                          <span className="text-gray-400 dark:text-gray-500">描述：</span>
+                          {item.description}
+                        </p>
+                      )}
+
+                      {isEditing && edit ? (
+                        <div className="mt-3 space-y-3">
+                          <CategorySelector
+                            categories={categories}
+                            primaryId={edit.primaryId}
+                            secondaryId={edit.secondaryId}
+                            onPrimaryChange={(id) =>
+                              updateEdit({ primaryId: id, secondaryId: null })
+                            }
+                            onSecondaryChange={(id) => updateEdit({ secondaryId: id })}
+                          />
+                          <TagSelector
+                            availableTags={availableTags}
+                            selectedTags={edit.tags}
+                            onChange={(tags) => updateEdit({ tags })}
+                          />
+                          <KeywordEditor
+                            keywords={edit.keywords}
+                            onChange={(keywords) => updateEdit({ keywords })}
+                          />
+                          <div className="space-y-1">
+                            <label className="block text-xs font-medium text-gray-600 dark:text-gray-300">
+                              描述
+                            </label>
+                            <textarea
+                              value={edit.description}
+                              onChange={(e) => updateEdit({ description: e.target.value })}
+                              rows={2}
+                              placeholder="请输入素材描述（可选）"
+                              className="w-full rounded-md border border-gray-300 px-2 py-1 text-xs text-gray-700 focus:border-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="block text-xs font-medium text-gray-600 dark:text-gray-300">
+                              AI 摘要
+                            </label>
+                            <textarea
+                              value={edit.summary}
+                              onChange={(e) => updateEdit({ summary: e.target.value })}
+                              rows={3}
+                              className="w-full rounded-md border border-gray-300 px-2 py-1 text-xs text-gray-700 focus:border-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200"
+                            />
+                          </div>
+                          {item.content_type === 'video' && (
+                            <div className="space-y-1">
+                              <label className="block text-xs font-medium text-gray-600 dark:text-gray-300">
+                                视频缩略图
+                              </label>
+                              <div className="flex items-center gap-3">
+                                <label
+                                  className={`inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-dashed border-gray-300 bg-gray-50 px-3 py-1.5 text-xs font-medium text-gray-600 transition hover:border-blue-300 hover:text-blue-600 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 dark:hover:border-blue-500 dark:hover:text-blue-300 ${
+                                    thumbUploading ? 'pointer-events-none opacity-60' : ''
+                                  }`}
+                                >
+                                  <UploadIcon className="size-3.5" />
+                                  {thumbUploading ? '上传中…' : '上传缩略图'}
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    className="hidden"
+                                    disabled={thumbUploading}
+                                    onChange={(e) => {
+                                      const file = e.target.files?.[0]
+                                      if (file) void handleThumbnailUpload(file)
+                                      e.target.value = ''
+                                    }}
+                                  />
+                                </label>
+                                {edit.thumbnailKey && (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      updateEdit({ thumbnailKey: null, thumbnailUrl: null })
+                                    }
+                                    className="text-xs text-gray-500 underline hover:text-red-600 dark:text-gray-400 dark:hover:text-red-400"
+                                  >
+                                    恢复默认（视频首帧）
+                                  </button>
+                                )}
+                                <span className="text-xs text-gray-400 dark:text-gray-500">
+                                  {edit.thumbnailKey ? '已设置自定义缩略图' : '默认使用视频首帧'}
+                                </span>
+                              </div>
+                            </div>
+                          )}
+                          {editError && <p className="text-xs text-red-500">{editError}</p>}
+                        </div>
                       ) : (
-                        item.ai_summary && (
-                          <p className="mt-2 text-xs italic text-gray-400 dark:text-gray-500">
-                            AI 摘要：{item.ai_summary}
-                          </p>
-                        )
+                        <>
+                          <div className="mt-2 flex flex-wrap items-center gap-1">
+                            {item.tags.map((t) => (
+                              <span
+                                key={t}
+                                className="inline-flex items-center rounded-md bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600 dark:bg-gray-700 dark:text-gray-300"
+                              >
+                                {t}
+                              </span>
+                            ))}
+                          </div>
+                          {item.ai_keywords.length > 0 && (
+                            <div className="mt-2 flex flex-wrap gap-1">
+                              <span className="text-xs text-gray-400 dark:text-gray-500">
+                                AI 关键词：
+                              </span>
+                              {item.ai_keywords.map((kw) => (
+                                <span
+                                  key={kw}
+                                  className="inline-flex items-center rounded-md bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-600 dark:bg-blue-900/30 dark:text-blue-300"
+                                >
+                                  {kw}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                          {item.ai_summary && (
+                            <p className="mt-2 text-xs italic text-gray-400 dark:text-gray-500">
+                              AI 摘要：{item.ai_summary}
+                            </p>
+                          )}
+                        </>
                       )}
                       {item.ai_error && (
                         <p className="mt-1 text-xs text-red-500">{item.ai_error}</p>
@@ -434,13 +731,15 @@ export default function Audit() {
                           <>
                             <button
                               onClick={() => saveEdit(item.id)}
-                              className="inline-flex items-center rounded-lg bg-blue-500 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 dark:focus:ring-offset-gray-800"
+                              disabled={savingEdit || thumbUploading}
+                              className="inline-flex items-center justify-center rounded-lg bg-blue-500 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 dark:focus:ring-offset-gray-800"
                             >
-                              保存
+                              {savingEdit ? '保存中…' : '保存'}
                             </button>
                             <button
                               onClick={cancelEdit}
-                              className="inline-flex items-center rounded-lg bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 dark:bg-gray-600 dark:text-gray-200 dark:hover:bg-gray-500 dark:focus:ring-offset-gray-800"
+                              disabled={savingEdit}
+                              className="inline-flex items-center justify-center rounded-lg bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-gray-600 dark:text-gray-200 dark:hover:bg-gray-500 dark:focus:ring-offset-gray-800"
                             >
                               取消
                             </button>
