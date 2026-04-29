@@ -509,7 +509,6 @@ export default function Audit() {
           {items.map((item) => {
             const isEditing = editingId === item.id
             const aiBadge = item.ai_status === 'completed' ? null : aiStatusLabel[item.ai_status]
-            const showActionColumn = isEditing || item.status === 'pending'
             return (
               <article
                 key={item.id}
@@ -725,49 +724,67 @@ export default function Audit() {
                         <p className="mt-1 text-xs text-red-500">{item.ai_error}</p>
                       )}
                     </div>
-                    {showActionColumn && (
-                      <div className="flex shrink-0 flex-col gap-2">
-                        {isEditing ? (
-                          <>
+                    <div className="flex shrink-0 flex-col gap-2">
+                      {isEditing ? (
+                        <>
+                          <button
+                            onClick={() => saveEdit(item.id)}
+                            disabled={savingEdit || thumbUploading}
+                            className="inline-flex items-center justify-center rounded-lg bg-blue-500 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 dark:focus:ring-offset-gray-800"
+                          >
+                            {savingEdit ? '保存中…' : '保存'}
+                          </button>
+                          <button
+                            onClick={cancelEdit}
+                            disabled={savingEdit}
+                            className="inline-flex items-center justify-center rounded-lg bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-gray-600 dark:text-gray-200 dark:hover:bg-gray-500 dark:focus:ring-offset-gray-800"
+                          >
+                            取消
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => startEdit(item)}
+                            className="inline-flex items-center rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium text-gray-600 shadow-sm transition hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 dark:focus:ring-offset-gray-800"
+                          >
+                            编辑
+                          </button>
+                          {item.status === 'pending' && (
+                            <>
+                              <button
+                                onClick={() => handleAudit(item.id, 'approved')}
+                                className="inline-flex items-center rounded-lg bg-green-500 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-offset-2 dark:focus:ring-offset-gray-800"
+                              >
+                                通过
+                              </button>
+                              <button
+                                onClick={() => handleAudit(item.id, 'rejected')}
+                                className="inline-flex items-center rounded-lg bg-red-500 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-offset-2 dark:focus:ring-offset-gray-800"
+                              >
+                                驳回
+                              </button>
+                            </>
+                          )}
+                          {item.status === 'approved' && (
                             <button
-                              onClick={() => saveEdit(item.id)}
-                              disabled={savingEdit || thumbUploading}
-                              className="inline-flex items-center justify-center rounded-lg bg-blue-500 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 dark:focus:ring-offset-gray-800"
+                              onClick={() => handleAudit(item.id, 'rejected')}
+                              className="inline-flex items-center rounded-lg bg-red-500 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-offset-2 dark:focus:ring-offset-gray-800"
                             >
-                              {savingEdit ? '保存中…' : '保存'}
+                              下架
                             </button>
-                            <button
-                              onClick={cancelEdit}
-                              disabled={savingEdit}
-                              className="inline-flex items-center justify-center rounded-lg bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-gray-600 dark:text-gray-200 dark:hover:bg-gray-500 dark:focus:ring-offset-gray-800"
-                            >
-                              取消
-                            </button>
-                          </>
-                        ) : (
-                          <>
-                            <button
-                              onClick={() => startEdit(item)}
-                              className="inline-flex items-center rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium text-gray-600 shadow-sm transition hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 dark:focus:ring-offset-gray-800"
-                            >
-                              编辑
-                            </button>
+                          )}
+                          {item.status === 'rejected' && (
                             <button
                               onClick={() => handleAudit(item.id, 'approved')}
                               className="inline-flex items-center rounded-lg bg-green-500 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-offset-2 dark:focus:ring-offset-gray-800"
                             >
                               通过
                             </button>
-                            <button
-                              onClick={() => handleAudit(item.id, 'rejected')}
-                              className="inline-flex items-center rounded-lg bg-red-500 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-offset-2 dark:focus:ring-offset-gray-800"
-                            >
-                              驳回
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    )}
+                          )}
+                        </>
+                      )}
+                    </div>
                   </div>
                 </div>
               </article>

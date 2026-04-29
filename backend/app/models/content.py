@@ -83,6 +83,9 @@ class Content(Base):
     embedding_text: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     uploaded_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    approved_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

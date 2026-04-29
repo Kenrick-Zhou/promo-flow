@@ -297,11 +297,18 @@ async def list_contents(
 
     total = (await db.execute(count_stmt)).scalar_one()
 
-    order_clause = (
-        Content.hot_score.desc() if sort_by == "hot" else Content.created_at.desc()
-    )
+    if sort_by == "hot":
+        order_clauses: tuple = (Content.hot_score.desc(), Content.created_at.desc())
+    else:
+        # "latest" sort: prefer approval time so the marketplace surfaces
+        # newly approved content first; fall back to upload time for items
+        # that were never approved (e.g. pending/rejected lists).
+        order_clauses = (
+            Content.approved_at.desc().nulls_last(),
+            Content.created_at.desc(),
+        )
     items = (
-        (await db.execute(stmt.offset(offset).limit(limit).order_by(order_clause)))
+        (await db.execute(stmt.offset(offset).limit(limit).order_by(*order_clauses)))
         .unique()
         .scalars()
         .all()
@@ -451,12 +458,16 @@ async def audit_content(
     if command.decision not in (AuditDecision.approved, AuditDecision.rejected):
         raise InvalidAuditActionError()
 
+    from datetime import datetime
+
     content = await get_content_orm(db, command.content_id)
     content.status = (
         ContentStatus.approved
         if command.decision == AuditDecision.approved
         else ContentStatus.rejected
     )
+    if command.decision == AuditDecision.approved:
+        content.approved_at = datetime.now(UTC)
 
     audit_log = AuditLog(
         content_id=command.content_id,
