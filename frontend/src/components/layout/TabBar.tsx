@@ -30,9 +30,9 @@ export default function TabBar() {
         {/* 中间 Logo 按钮 */}
         <Link
           to="/upload"
-          className="-mt-7 block size-14 rounded-full shadow-[0_6px_20px_rgba(0,0,0,0.22),0_2px_6px_rgba(0,0,0,0.12)] transition-all active:scale-95 hover:scale-105 hover:shadow-[0_10px_28px_rgba(0,0,0,0.28),0_3px_8px_rgba(0,0,0,0.16)]"
+          className="-mt-7 block size-14 drop-shadow-[0_6px_20px_rgba(0,0,0,0.22)] drop-shadow-[0_2px_6px_rgba(0,0,0,0.12)] transition-all active:scale-95 hover:scale-105 hover:drop-shadow-[0_10px_28px_rgba(0,0,0,0.28)]"
         >
-          <img src="/logo.png" alt="上传" className="size-14 rounded-full" />
+          <img src="/logo.png" alt="上传" className="size-14" />
         </Link>
 
         {/* 我的 */}

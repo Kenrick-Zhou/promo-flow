@@ -88,6 +88,26 @@ async def generate_presigned_download_url(file_key: str, expires: int = 3600) ->
     return await run_in_threadpool(_presigned_download_url, file_key, expires)
 
 
+def _head_object_size(file_key: str) -> int | None:
+    try:
+        meta = _bucket.head_object(file_key)
+    except Exception:
+        logger.warning("head_object failed for key=%s", file_key, exc_info=True)
+        return None
+    size = getattr(meta, "content_length", None)
+    if size is None:
+        return None
+    try:
+        return int(size)
+    except (TypeError, ValueError):
+        return None
+
+
+async def head_object_size(file_key: str) -> int | None:
+    """Return the byte size of an OSS object, or None on failure."""
+    return await run_in_threadpool(_head_object_size, file_key)
+
+
 async def delete_object(file_key: str) -> None:
     """Delete an object from OSS."""
     await run_in_threadpool(_delete_object, file_key)

@@ -71,6 +71,11 @@ class Settings(BaseSettings):
     OSS_ENDPOINT: str
     OSS_BUCKET_DOMAIN: str = ""
 
+    # 文件转发阈值：超过该大小后，飞书机器人改发下载链接而非文件本身
+    MAX_FORWARD_FILE_BYTES: int = 60 * 1024 * 1024
+    # 大文件场景下，发给用户的预签名下载链接有效期（秒），默认 24 小时
+    LARGE_FILE_DOWNLOAD_URL_EXPIRES_S: int = 24 * 60 * 60
+
     # Feishu
     FEISHU_APP_ID: str
     FEISHU_APP_SECRET: str

@@ -516,13 +516,16 @@ def _install_download_test_stubs(
     content_type: ContentType,
     fail_markdown: bool = False,
     target_kind: str = "user",
+    file_size: int | None = 1024,
 ) -> list[tuple[str, str]]:
     events: list[tuple[str, str]] = []
     output = _build_download_output(content_type=content_type)
     content = SimpleNamespace(
+        id=output.id,
         file_url=output.file_url,
         file_key=output.file_key,
         content_type=output.content_type,
+        file_size=file_size,
     )
 
     class _AsyncSessionContext:
@@ -702,3 +705,54 @@ async def test_send_file_to_chat_continues_when_card_send_fails(
         ("card", "介绍文案"),
         ("chat_file", "demo.mp4"),
     ]
+
+
+@pytest.mark.asyncio
+async def test_send_file_to_user_skips_forwarding_when_file_too_large(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    events = _install_download_test_stubs(
+        monkeypatch,
+        content_type=ContentType.video,
+        file_size=200 * 1024 * 1024,  # 200 MB > 60 MB default threshold
+    )
+
+    async def fake_presign(file_key: str, expires: int = 3600) -> str:
+        assert file_key == "uploads/demo.mp4"
+        assert expires > 0
+        return f"https://oss.example.com/{file_key}?sig=abc"
+
+    monkeypatch.setattr(content_core, "generate_presigned_download_url", fake_presign)
+
+    await send_file_to_user(1, feishu_open_id="ou_test")
+
+    # Only a single markdown link message should be sent, no file/image forward.
+    assert len(events) == 1
+    kind, payload = events[0]
+    assert kind == "markdown"
+    assert "https://oss.example.com/uploads/demo.mp4?sig=abc" in payload
+    assert "200.0 MB" in payload
+
+
+@pytest.mark.asyncio
+async def test_send_file_to_chat_skips_forwarding_when_file_too_large(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    events = _install_download_test_stubs(
+        monkeypatch,
+        content_type=ContentType.video,
+        file_size=200 * 1024 * 1024,
+    )
+
+    async def fake_presign(file_key: str, expires: int = 3600) -> str:
+        return f"https://oss.example.com/{file_key}?sig=xyz"
+
+    monkeypatch.setattr(content_core, "generate_presigned_download_url", fake_presign)
+
+    await send_file_to_chat(1, chat_id="oc_test_chat")
+
+    assert len(events) == 1
+    kind, payload = events[0]
+    assert kind == "card"
+    assert "https://oss.example.com/uploads/demo.mp4?sig=xyz" in payload
+    assert "200.0 MB" in payload

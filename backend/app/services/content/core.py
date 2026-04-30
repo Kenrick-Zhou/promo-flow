@@ -33,7 +33,11 @@ from app.services.content.errors import (
     InvalidAuditActionError,
     InvalidCategoryError,
 )
-from app.services.infrastructure.storage import get_public_url
+from app.services.infrastructure.storage import (
+    generate_presigned_download_url,
+    get_public_url,
+    head_object_size,
+)
 
 # Eager-loading options for Content queries
 _CONTENT_LOAD_OPTIONS = [
@@ -119,6 +123,64 @@ def _render_download_intro_markdown(content: ContentOutput) -> str:
         view_count=content.view_count,
         download_count=content.download_count,
     ).strip()
+
+
+def _format_file_size(file_bytes: int) -> str:
+    """Render bytes as a short human-readable size string."""
+    mb = file_bytes / (1024 * 1024)
+    if mb >= 1024:
+        return f"{mb / 1024:.2f} GB"
+    return f"{mb:.1f} MB"
+
+
+def _render_large_file_link_markdown(
+    content: ContentOutput,
+    *,
+    download_url: str,
+    file_size_bytes: int,
+    link_valid_seconds: int,
+) -> str:
+    """Render the markdown shown when a file is too large to forward."""
+    return render(
+        "download_content_link.j2",
+        **_build_template_kwargs(content),
+        view_count=content.view_count,
+        download_count=content.download_count,
+        download_url=download_url,
+        file_size_text=_format_file_size(file_size_bytes),
+        link_valid_hours=max(1, link_valid_seconds // 3600),
+    ).strip()
+
+
+async def _resolve_file_size_bytes(content: Content) -> int | None:
+    """Return file size in bytes; query OSS HEAD and persist if not yet stored."""
+    if content.file_size is not None:
+        return content.file_size
+
+    size = await head_object_size(content.file_key)
+    if size is None:
+        return None
+
+    # Persist for next time. Use a fresh session to avoid coupling to the
+    # caller's session lifecycle (which may already be closed).
+    from app.db.session import AsyncSessionLocal
+
+    try:
+        async with AsyncSessionLocal() as db:
+            db_content = await db.get(Content, content.id)
+            if db_content is not None and db_content.file_size is None:
+                db_content.file_size = size
+                await db.commit()
+    except Exception:
+        # Persisting is a best-effort optimisation; never fail delivery on it.
+        import logging
+
+        logging.getLogger("promoflow.api").warning(
+            "Failed to persist file_size for content %s", content.id, exc_info=True
+        )
+
+    content.file_size = size
+    return size
 
 
 def render_group_approved_markdown(content: ContentOutput) -> str:
@@ -627,6 +689,7 @@ async def send_file_to_user(
 
     import httpx
 
+    from app.core.config import settings
     from app.db.session import AsyncSessionLocal
     from app.services.infrastructure.feishu import (
         send_file_to_user_sync as _feishu_send_file_sync,
@@ -672,19 +735,57 @@ async def send_file_to_user(
                     else:
                         send_file(target_id, tmp, file_name)
 
-    async def _load_delivery_payload() -> tuple[str, str, bool, str]:
+    async def _load_delivery_payload() -> (
+        tuple[str, str, str, bool, ContentOutput, int | None]
+    ):
         async with AsyncSessionLocal() as db:
             content = await get_content_orm(db, content_id)
             content_output = _content_to_output(content)
+            file_size = await _resolve_file_size_bytes(content)
 
         file_url = content.file_url or get_public_url(content.file_key)
+        file_key = content.file_key
         file_name = content.file_key.rsplit("/", 1)[-1]
         is_image = content.content_type == ContentType.image
-        intro_markdown = _render_download_intro_markdown(content_output)
-        return file_url, file_name, is_image, intro_markdown
+        return file_url, file_key, file_name, is_image, content_output, file_size
 
     try:
-        file_url, file_name, is_image, intro_markdown = await _load_delivery_payload()
+        (
+            file_url,
+            file_key,
+            file_name,
+            is_image,
+            content_output,
+            file_size,
+        ) = await _load_delivery_payload()
+
+        max_forward = settings.MAX_FORWARD_FILE_BYTES
+        if file_size is not None and file_size > max_forward:
+            link_expires = settings.LARGE_FILE_DOWNLOAD_URL_EXPIRES_S
+            download_url = await generate_presigned_download_url(
+                file_key, expires=link_expires
+            )
+            link_markdown = _render_large_file_link_markdown(
+                content_output,
+                download_url=download_url,
+                file_size_bytes=file_size,
+                link_valid_seconds=link_expires,
+            )
+            try:
+                await _feishu_send_markdown(
+                    feishu_open_id,
+                    title="文件较大，请使用下载链接",
+                    markdown=link_markdown,
+                )
+            except Exception:
+                logger.exception(
+                    "Failed to send large-file link to user %s for content %s",
+                    feishu_open_id,
+                    content_id,
+                )
+            return
+
+        intro_markdown = _render_download_intro_markdown(content_output)
 
         try:
             await _feishu_send_markdown(
@@ -727,6 +828,7 @@ async def send_file_to_chat(
 
     import httpx
 
+    from app.core.config import settings
     from app.db.session import AsyncSessionLocal
     from app.services.infrastructure.feishu import (
         send_file_to_chat_sync as _feishu_send_file_to_chat_sync,
@@ -768,10 +870,39 @@ async def send_file_to_chat(
         async with AsyncSessionLocal() as db:
             content = await get_content_orm(db, content_id)
             content_output = _content_to_output(content)
+            file_size = await _resolve_file_size_bytes(content)
 
         file_url = content.file_url or get_public_url(content.file_key)
+        file_key = content.file_key
         file_name = content.file_key.rsplit("/", 1)[-1]
         is_image = content.content_type == ContentType.image
+
+        max_forward = settings.MAX_FORWARD_FILE_BYTES
+        if file_size is not None and file_size > max_forward:
+            link_expires = settings.LARGE_FILE_DOWNLOAD_URL_EXPIRES_S
+            download_url = await generate_presigned_download_url(
+                file_key, expires=link_expires
+            )
+            link_markdown = _render_large_file_link_markdown(
+                content_output,
+                download_url=download_url,
+                file_size_bytes=file_size,
+                link_valid_seconds=link_expires,
+            )
+            try:
+                await _feishu_send_card_to_chat(
+                    chat_id,
+                    title="文件较大，请使用下载链接",
+                    markdown=link_markdown,
+                )
+            except Exception:
+                logger.exception(
+                    "Failed to send large-file link to chat %s for content %s",
+                    chat_id,
+                    content_id,
+                )
+            return
+
         intro_markdown = _render_download_intro_markdown(content_output)
 
         try:
