@@ -1,6 +1,18 @@
 import { Link, useNavigate } from 'react-router-dom'
-import { Upload, ClipboardCheck, Settings, LogOut, ChevronRight } from 'lucide-react'
+import {
+  Upload,
+  ClipboardCheck,
+  Settings,
+  LogOut,
+  ChevronRight,
+  Sun,
+  Moon,
+  Monitor,
+} from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
+import { useTheme } from '@/hooks/useTheme'
+import type { ThemeMode } from '@/store/theme'
+import { clsx } from 'clsx'
 
 const ROLE_LABELS: Record<string, string> = {
   employee: '普通员工',
@@ -10,6 +22,7 @@ const ROLE_LABELS: Record<string, string> = {
 
 export default function Me() {
   const { user, logout } = useAuth()
+  const { mode, setMode } = useTheme()
   const navigate = useNavigate()
 
   const isReviewerOrAdmin = user?.role === 'reviewer' || user?.role === 'admin'
@@ -52,6 +65,14 @@ export default function Me() {
         {isAdmin && <MenuItem to="/admin" icon={Settings} label="管理设置" />}
       </div>
 
+      {/* 外观 */}
+      <div className="overflow-hidden rounded-2xl bg-white shadow-sm dark:bg-gray-800">
+        <div className="flex items-center justify-between px-5 py-4">
+          <span className="text-sm font-medium text-gray-900 dark:text-gray-100">外观</span>
+          <ThemeSwitcher mode={mode} onChange={setMode} />
+        </div>
+      </div>
+
       {/* 退出登录 */}
       <div className="overflow-hidden rounded-2xl bg-white shadow-sm dark:bg-gray-800">
         <button
@@ -82,5 +103,44 @@ function MenuItem({ to, icon: Icon, label }: MenuItemProps) {
       <span className="flex-1 text-sm font-medium text-gray-900 dark:text-gray-100">{label}</span>
       <ChevronRight className="size-4 text-gray-400" />
     </Link>
+  )
+}
+
+const THEME_OPTIONS: Array<{
+  value: ThemeMode
+  label: string
+  icon: React.ComponentType<{ className?: string }>
+}> = [
+  { value: 'light', label: '明亮', icon: Sun },
+  { value: 'dark', label: '暗黑', icon: Moon },
+  { value: 'system', label: '跟随系统', icon: Monitor },
+]
+
+interface ThemeSwitcherProps {
+  mode: ThemeMode
+  onChange: (mode: ThemeMode) => void
+}
+
+function ThemeSwitcher({ mode, onChange }: ThemeSwitcherProps) {
+  return (
+    <div className="flex items-center gap-1 rounded-lg bg-gray-100 p-1 dark:bg-gray-700">
+      {THEME_OPTIONS.map(({ value, label, icon: Icon }) => (
+        <button
+          key={value}
+          type="button"
+          onClick={() => onChange(value)}
+          className={clsx(
+            'flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors',
+            mode === value
+              ? 'bg-white text-purple-700 shadow-sm dark:bg-gray-600 dark:text-purple-300'
+              : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200',
+          )}
+          aria-pressed={mode === value}
+        >
+          <Icon className="size-3.5" />
+          {label}
+        </button>
+      ))}
+    </div>
   )
 }

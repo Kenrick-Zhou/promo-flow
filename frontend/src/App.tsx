@@ -1,6 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import Layout from '@/components/layout/Layout'
 import { useAuthStore } from '@/store/auth'
+import { useTheme } from '@/hooks/useTheme'
 import Dashboard from '@/pages/Dashboard'
 import Upload from '@/pages/Upload'
 import Audit from '@/pages/Audit'
@@ -29,6 +30,8 @@ function ReviewerRoute({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
+  useTheme()
+
   return (
     <BrowserRouter>
       <Routes>
